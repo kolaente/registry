@@ -18,6 +18,10 @@ type Handler struct {
 // NewHandler creates a new registry handler
 func NewHandler(cfg *config.Config) (*Handler, error) {
 	// Create distribution configuration
+	// Note: We don't configure Auth here because we handle authentication
+	// ourselves through middleware. Distribution will run without auth,
+	// and our middleware will protect the endpoints.
+	// We also don't set HTTP.Addr since we're wrapping the registry in our own HTTP server.
 	distConfig := &configuration.Configuration{
 		Version: "0.1",
 		Storage: configuration.Storage{
@@ -26,16 +30,8 @@ func NewHandler(cfg *config.Config) (*Handler, error) {
 			},
 		},
 		HTTP: configuration.HTTP{
-			Addr: cfg.Server.Addr,
 			Headers: http.Header{
 				"X-Content-Type-Options": []string{"nosniff"},
-			},
-		},
-		Auth: configuration.Auth{
-			"token": configuration.Parameters{
-				"realm":   cfg.Auth.Realm,
-				"service": cfg.Auth.Service,
-				"issuer":  cfg.Auth.Issuer,
 			},
 		},
 	}

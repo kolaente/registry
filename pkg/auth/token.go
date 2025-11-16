@@ -47,30 +47,33 @@ func NewTokenServiceFromFiles(issuer, service, privateKeyPath, publicKeyPath str
 	if privateKeyPath != "" {
 		privateKeyData, err := os.ReadFile(privateKeyPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read private key: %w", err)
-		}
-
-		block, _ := pem.Decode(privateKeyData)
-		if block == nil {
-			return nil, fmt.Errorf("failed to decode PEM block from private key")
-		}
-
-		privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-		if err != nil {
-			// Try PKCS8 format
-			key, err2 := x509.ParsePKCS8PrivateKey(block.Bytes)
-			if err2 != nil {
-				return nil, fmt.Errorf("failed to parse private key: %w", err)
+			// If file doesn't exist, we'll generate new keys later
+			if !os.IsNotExist(err) {
+				return nil, fmt.Errorf("failed to read private key: %w", err)
 			}
-			var ok bool
-			privateKey, ok = key.(*rsa.PrivateKey)
-			if !ok {
-				return nil, fmt.Errorf("key is not RSA private key")
+		} else {
+			block, _ := pem.Decode(privateKeyData)
+			if block == nil {
+				return nil, fmt.Errorf("failed to decode PEM block from private key")
 			}
-		}
 
-		ts.privateKey = privateKey
-		ts.publicKey = &privateKey.PublicKey
+			privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+			if err != nil {
+				// Try PKCS8 format
+				key, err2 := x509.ParsePKCS8PrivateKey(block.Bytes)
+				if err2 != nil {
+					return nil, fmt.Errorf("failed to parse private key: %w", err)
+				}
+				var ok bool
+				privateKey, ok = key.(*rsa.PrivateKey)
+				if !ok {
+					return nil, fmt.Errorf("key is not RSA private key")
+				}
+			}
+
+			ts.privateKey = privateKey
+			ts.publicKey = &privateKey.PublicKey
+		}
 	}
 
 	// Load public key if provided separately
