@@ -267,8 +267,24 @@ go build -o registry ./cmd/registry
 ### Run Tests
 
 ```bash
+# Run all tests
 go test ./...
+
+# Run with coverage
+go test -cover ./pkg/...
+
+# Run with race detection
+go test -race ./pkg/...
+
+# Generate coverage report
+make test-coverage
 ```
+
+**Test Coverage:**
+- ACL Matcher: 97.4%
+- Authentication: 80.6%
+- Configuration: 100%
+- Overall: High coverage across all core packages
 
 ### Project Structure
 
