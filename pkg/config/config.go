@@ -1,0 +1,119 @@
+package config
+
+import (
+	"fmt"
+	"os"
+
+	"gopkg.in/yaml.v3"
+)
+
+// Config represents the main configuration structure
+type Config struct {
+	Server  ServerConfig         `yaml:"server"`
+	Users   map[string]User      `yaml:"users"`
+	ACL     []ACLRule            `yaml:"acl"`
+	Storage StorageConfig        `yaml:"storage"`
+	Auth    AuthConfig           `yaml:"auth"`
+}
+
+// ServerConfig holds server-specific settings
+type ServerConfig struct {
+	Addr string    `yaml:"addr"`
+	TLS  TLSConfig `yaml:"tls"`
+}
+
+// TLSConfig holds TLS/SSL settings
+type TLSConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	CertFile string `yaml:"cert_file,omitempty"`
+	KeyFile  string `yaml:"key_file,omitempty"`
+}
+
+// User represents a user account
+type User struct {
+	Password string `yaml:"password"` // bcrypt hash
+}
+
+// ACLRule defines access control rules
+type ACLRule struct {
+	Account string   `yaml:"account"`
+	Name    string   `yaml:"name"`    // Repository name pattern (supports wildcards)
+	Actions []string `yaml:"actions"` // pull, push, delete, or *
+}
+
+// StorageConfig defines where to store registry data
+type StorageConfig struct {
+	Filesystem FilesystemStorage `yaml:"filesystem"`
+}
+
+// FilesystemStorage configures filesystem storage
+type FilesystemStorage struct {
+	RootDirectory string `yaml:"rootdirectory"`
+}
+
+// AuthConfig holds authentication settings
+type AuthConfig struct {
+	Realm      string `yaml:"realm"`
+	Service    string `yaml:"service"`
+	Issuer     string `yaml:"issuer"`
+	PrivateKey string `yaml:"private_key"` // Path to RSA private key
+	PublicKey  string `yaml:"public_key"`  // Path to RSA public key
+}
+
+// Load reads and parses the configuration file
+func Load(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// Set defaults
+	if cfg.Server.Addr == "" {
+		cfg.Server.Addr = ":5000"
+	}
+	if cfg.Auth.Realm == "" {
+		cfg.Auth.Realm = "Registry"
+	}
+	if cfg.Auth.Service == "" {
+		cfg.Auth.Service = "Docker Registry"
+	}
+	if cfg.Auth.Issuer == "" {
+		cfg.Auth.Issuer = "registry-auth-server"
+	}
+	if cfg.Storage.Filesystem.RootDirectory == "" {
+		cfg.Storage.Filesystem.RootDirectory = "/data/registry"
+	}
+
+	return &cfg, nil
+}
+
+// Validate checks if the configuration is valid
+func (c *Config) Validate() error {
+	if len(c.Users) == 0 {
+		return fmt.Errorf("at least one user must be defined")
+	}
+
+	if c.Storage.Filesystem.RootDirectory == "" {
+		return fmt.Errorf("storage root directory must be set")
+	}
+
+	// Validate ACL rules
+	for i, rule := range c.ACL {
+		if rule.Account == "" {
+			return fmt.Errorf("ACL rule %d: account cannot be empty", i)
+		}
+		if rule.Name == "" {
+			return fmt.Errorf("ACL rule %d: name cannot be empty", i)
+		}
+		if len(rule.Actions) == 0 {
+			return fmt.Errorf("ACL rule %d: at least one action must be specified", i)
+		}
+	}
+
+	return nil
+}
