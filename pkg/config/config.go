@@ -9,12 +9,12 @@ import (
 
 // Config represents the main configuration structure
 type Config struct {
-	Server    ServerConfig      `yaml:"server"`
-	Users     map[string]User   `yaml:"users"`
-	ACL       []ACLRule         `yaml:"acl"`
-	Storage   StorageConfig     `yaml:"storage"`
-	Auth      AuthConfig        `yaml:"auth"`
-	RateLimit RateLimitConfig   `yaml:"rate_limit"`
+	Server    ServerConfig    `yaml:"server"`
+	Users     map[string]User `yaml:"users"`
+	ACL       []ACLRule       `yaml:"acl"`
+	Storage   StorageConfig   `yaml:"storage"`
+	Auth      AuthConfig      `yaml:"auth"`
+	RateLimit RateLimitConfig `yaml:"rate_limit"`
 }
 
 // ServerConfig holds server-specific settings
