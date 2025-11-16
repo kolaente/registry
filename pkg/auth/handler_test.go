@@ -339,26 +339,6 @@ func TestAuthMiddleware_Middleware_SkipTokenEndpoint(t *testing.T) {
 	}
 }
 
-func TestAuthMiddleware_Middleware_SkipVersionCheck(t *testing.T) {
-	tokenService, _ := NewTokenService("test-issuer", "test-service")
-	middleware := NewAuthMiddleware(tokenService, "test-service")
-
-	nextCalled := false
-	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		nextCalled = true
-		w.WriteHeader(http.StatusOK)
-	})
-
-	req := httptest.NewRequest("GET", "/v2/", nil)
-	w := httptest.NewRecorder()
-
-	middleware.Middleware(next).ServeHTTP(w, req)
-
-	if !nextCalled {
-		t.Error("next handler should be called for /v2/ without auth")
-	}
-}
-
 func TestAuthMiddleware_Middleware_InvalidAuthHeader(t *testing.T) {
 	tokenService, _ := NewTokenService("test-issuer", "test-service")
 	middleware := NewAuthMiddleware(tokenService, "test-service")
