@@ -241,7 +241,7 @@ func TestHandler_ServeHTTP_NoScope(t *testing.T) {
 
 func TestAuthMiddleware_Middleware_NoAuth(t *testing.T) {
 	tokenService, _ := NewTokenService("test-issuer", "test-service")
-	middleware := NewAuthMiddleware(tokenService)
+	middleware := NewAuthMiddleware(tokenService, "test-service")
 
 	nextCalled := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -269,7 +269,7 @@ func TestAuthMiddleware_Middleware_NoAuth(t *testing.T) {
 
 func TestAuthMiddleware_Middleware_ValidToken(t *testing.T) {
 	tokenService, _ := NewTokenService("test-issuer", "test-service")
-	middleware := NewAuthMiddleware(tokenService)
+	middleware := NewAuthMiddleware(tokenService, "test-service")
 
 	// Generate a valid token
 	token, _ := tokenService.GenerateToken("testuser", nil)
@@ -297,7 +297,7 @@ func TestAuthMiddleware_Middleware_ValidToken(t *testing.T) {
 
 func TestAuthMiddleware_Middleware_InvalidToken(t *testing.T) {
 	tokenService, _ := NewTokenService("test-issuer", "test-service")
-	middleware := NewAuthMiddleware(tokenService)
+	middleware := NewAuthMiddleware(tokenService, "test-service")
 
 	nextCalled := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -321,7 +321,7 @@ func TestAuthMiddleware_Middleware_InvalidToken(t *testing.T) {
 
 func TestAuthMiddleware_Middleware_SkipTokenEndpoint(t *testing.T) {
 	tokenService, _ := NewTokenService("test-issuer", "test-service")
-	middleware := NewAuthMiddleware(tokenService)
+	middleware := NewAuthMiddleware(tokenService, "test-service")
 
 	nextCalled := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -341,7 +341,7 @@ func TestAuthMiddleware_Middleware_SkipTokenEndpoint(t *testing.T) {
 
 func TestAuthMiddleware_Middleware_SkipVersionCheck(t *testing.T) {
 	tokenService, _ := NewTokenService("test-issuer", "test-service")
-	middleware := NewAuthMiddleware(tokenService)
+	middleware := NewAuthMiddleware(tokenService, "test-service")
 
 	nextCalled := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -361,7 +361,7 @@ func TestAuthMiddleware_Middleware_SkipVersionCheck(t *testing.T) {
 
 func TestAuthMiddleware_Middleware_InvalidAuthHeader(t *testing.T) {
 	tokenService, _ := NewTokenService("test-issuer", "test-service")
-	middleware := NewAuthMiddleware(tokenService)
+	middleware := NewAuthMiddleware(tokenService, "test-service")
 
 	nextCalled := false
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -513,5 +513,34 @@ func TestHandler_ServeHTTP_ValidCredentials(t *testing.T) {
 
 	if response.Token == "" {
 		t.Error("Token should not be empty")
+	}
+}
+
+func TestAuthMiddleware_Middleware_ServiceNameInWWWAuthenticate(t *testing.T) {
+	tokenService, _ := NewTokenService("test-issuer", "Custom Docker Registry Service")
+	middleware := NewAuthMiddleware(tokenService, "Custom Docker Registry Service")
+
+	nextCalled := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+	})
+
+	req := httptest.NewRequest("GET", "/v2/test", nil)
+	w := httptest.NewRecorder()
+
+	middleware.Middleware(next).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Status = %v, want %v", w.Code, http.StatusUnauthorized)
+	}
+
+	if nextCalled {
+		t.Error("next handler should not be called without auth")
+	}
+
+	wwwAuth := w.Header().Get("WWW-Authenticate")
+	expectedWWWAuth := `Bearer realm="/v2/token",service="Custom Docker Registry Service"`
+	if wwwAuth != expectedWWWAuth {
+		t.Errorf("WWW-Authenticate = %q, want %q", wwwAuth, expectedWWWAuth)
 	}
 }

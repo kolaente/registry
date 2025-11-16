@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -145,12 +146,14 @@ func (h *Handler) unauthorized(w http.ResponseWriter, message string) {
 // AuthMiddleware validates tokens in incoming requests
 type AuthMiddleware struct {
 	tokenService *TokenService
+	service      string
 }
 
 // NewAuthMiddleware creates a new auth middleware
-func NewAuthMiddleware(tokenService *TokenService) *AuthMiddleware {
+func NewAuthMiddleware(tokenService *TokenService, service string) *AuthMiddleware {
 	return &AuthMiddleware{
 		tokenService: tokenService,
+		service:      service,
 	}
 }
 
@@ -174,7 +177,7 @@ func (am *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 		if authHeader == "" {
 			// Check if this is a pull request (GET) - some clients don't send auth for public repos
 			// For now, require auth for all requests
-			w.Header().Set("WWW-Authenticate", `Bearer realm="/v2/token",service="registry"`)
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="/v2/token",service="%s"`, am.service))
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -189,7 +192,7 @@ func (am *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 		// Validate token
 		claims, err := am.tokenService.ValidateToken(parts[1])
 		if err != nil {
-			w.Header().Set("WWW-Authenticate", `Bearer realm="/v2/token",service="registry"`)
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="/v2/token",service="%s"`, am.service))
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
 		}

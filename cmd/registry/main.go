@@ -90,7 +90,7 @@ func runServer(c *cli.Context) error {
 	}
 
 	// Create auth middleware
-	authMiddleware := auth.NewAuthMiddleware(tokenService)
+	authMiddleware := auth.NewAuthMiddleware(tokenService, cfg.Auth.Service)
 
 	// Create rate limiter if enabled
 	var rateLimitMiddleware func(http.Handler) http.Handler
