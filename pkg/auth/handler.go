@@ -8,6 +8,7 @@ import (
 
 	"github.com/kolaente/registry/pkg/acl"
 	"github.com/kolaente/registry/pkg/config"
+	"github.com/kolaente/registry/pkg/utils"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -71,13 +72,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !exists || err != nil {
 		// Log failed authentication attempt
 		log.Printf("Failed authentication attempt for user '%s' from %s (user_exists=%v)",
-			username, getClientIP(r), exists)
+			username, utils.GetClientIP(r), exists)
 		h.unauthorized(w, "Invalid credentials")
 		return
 	}
 
 	// Log successful authentication
-	log.Printf("Successful authentication for user '%s' from %s", username, getClientIP(r))
+	log.Printf("Successful authentication for user '%s' from %s", username, utils.GetClientIP(r))
 
 	// Parse scope to determine requested access
 	var accessEntries []AccessEntry
@@ -198,22 +199,4 @@ func (am *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
-}
-
-// getClientIP extracts the client IP from the request
-func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header (if behind proxy)
-	forwarded := r.Header.Get("X-Forwarded-For")
-	if forwarded != "" {
-		return forwarded
-	}
-
-	// Check X-Real-IP header
-	realIP := r.Header.Get("X-Real-IP")
-	if realIP != "" {
-		return realIP
-	}
-
-	// Fall back to RemoteAddr
-	return r.RemoteAddr
 }

@@ -1,11 +1,11 @@
 package ratelimit
 
 import (
-	"net"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/kolaente/registry/pkg/utils"
 	"golang.org/x/time/rate"
 )
 
@@ -78,36 +78,10 @@ func (l *Limiter) cleanupVisitors() {
 	}
 }
 
-// getIP extracts the real IP address from the request
-func getIP(r *http.Request) string {
-	// Check X-Forwarded-For header (if behind proxy)
-	forwarded := r.Header.Get("X-Forwarded-For")
-	if forwarded != "" {
-		// Take the first IP in the list
-		if ip, _, err := net.SplitHostPort(forwarded); err == nil {
-			return ip
-		}
-		return forwarded
-	}
-
-	// Check X-Real-IP header
-	realIP := r.Header.Get("X-Real-IP")
-	if realIP != "" {
-		return realIP
-	}
-
-	// Fall back to RemoteAddr
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return ip
-}
-
 // Middleware returns an HTTP middleware that enforces rate limiting
 func (l *Limiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := getIP(r)
+		ip := utils.GetClientIP(r)
 		limiter := l.getVisitor(ip)
 
 		if !limiter.Allow() {
