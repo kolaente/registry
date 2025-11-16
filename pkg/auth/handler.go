@@ -49,6 +49,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Get credentials from basic auth
 	username, password, ok := r.BasicAuth()
 	if !ok || username == "" {
+		log.Printf("Authentication failed: no credentials provided from %s", utils.GetClientIP(r))
 		h.unauthorized(w, "")
 		return
 	}
@@ -93,6 +94,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			// Filter requested actions to only those that are allowed
 			grantedActions := make([]string, 0)
+			deniedActions := make([]string, 0)
 			allowedMap := make(map[string]bool)
 			for _, action := range allowedActions {
 				allowedMap[action] = true
@@ -101,7 +103,15 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			for _, action := range requestedActions {
 				if allowedMap[action] {
 					grantedActions = append(grantedActions, action)
+				} else {
+					deniedActions = append(deniedActions, action)
 				}
+			}
+
+			// Log ACL denials
+			if len(deniedActions) > 0 {
+				log.Printf("ACL denied access for user '%s' to repository '%s' for actions %v from %s (allowed_actions=%v)",
+					username, name, deniedActions, utils.GetClientIP(r), allowedActions)
 			}
 
 			// Only add access entry if there are granted actions
@@ -111,6 +121,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Name:    name,
 					Actions: grantedActions,
 				})
+			} else {
+				// All requested actions were denied
+				log.Printf("ACL denied all access for user '%s' to repository '%s': requested %v but no matching ACL rule from %s",
+					username, name, requestedActions, utils.GetClientIP(r))
 			}
 		}
 	}
@@ -177,6 +191,8 @@ func (am *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 		if authHeader == "" {
 			// Check if this is a pull request (GET) - some clients don't send auth for public repos
 			// For now, require auth for all requests
+			log.Printf("Authentication failed: no Bearer token provided for %s %s from %s",
+				r.Method, r.URL.Path, utils.GetClientIP(r))
 			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="/v2/token",service="%s"`, am.service))
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
@@ -185,6 +201,8 @@ func (am *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 		// Parse Bearer token
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
+			log.Printf("Authentication failed: invalid/malformed authorization header for %s %s from %s (header: %s)",
+				r.Method, r.URL.Path, utils.GetClientIP(r), authHeader)
 			http.Error(w, "Invalid authorization header", http.StatusUnauthorized)
 			return
 		}
@@ -192,13 +210,17 @@ func (am *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 		// Validate token
 		claims, err := am.tokenService.ValidateToken(parts[1])
 		if err != nil {
+			// Log detailed token validation failure
+			log.Printf("Authentication failed: token validation failed for %s %s from %s: %v",
+				r.Method, r.URL.Path, utils.GetClientIP(r), err)
 			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="/v2/token",service="%s"`, am.service))
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
 		}
 
 		// Token is valid - you could add claims to request context here if needed
-		_ = claims
+		log.Printf("Token validation successful for user '%s' accessing %s %s from %s",
+			claims.Subject, r.Method, r.URL.Path, utils.GetClientIP(r))
 
 		next.ServeHTTP(w, r)
 	})

@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -201,14 +202,26 @@ func (ts *TokenService) ValidateToken(tokenString string) (*RegistryToken, error
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse token: %w", err)
+		// Provide specific error messages for common JWT errors
+		switch {
+		case errors.Is(err, jwt.ErrTokenExpired):
+			return nil, fmt.Errorf("token expired")
+		case errors.Is(err, jwt.ErrTokenNotValidYet):
+			return nil, fmt.Errorf("token not valid yet")
+		case errors.Is(err, jwt.ErrTokenSignatureInvalid):
+			return nil, fmt.Errorf("token signature verification failed")
+		case errors.Is(err, jwt.ErrTokenMalformed):
+			return nil, fmt.Errorf("malformed token")
+		default:
+			return nil, fmt.Errorf("failed to parse token: %w", err)
+		}
 	}
 
 	if claims, ok := token.Claims.(*RegistryToken); ok && token.Valid {
 		return claims, nil
 	}
 
-	return nil, fmt.Errorf("invalid token")
+	return nil, fmt.Errorf("invalid token claims")
 }
 
 // GetPublicKey returns the PEM-encoded public key
