@@ -1,0 +1,62 @@
+# Example configuration for Docker Registry
+# Copy this file to config.yaml and customize as needed
+
+server:
+  # Address to listen on
+  addr: ":5000"
+
+  # TLS configuration (recommended to use Traefik or nginx for TLS termination)
+  tls:
+    enabled: false
+    # cert_file: /path/to/cert.pem
+    # key_file: /path/to/key.pem
+
+# User accounts with bcrypt-hashed passwords
+# Generate with: htpasswd -nbBC 10 username password
+users:
+  # Username: admin, Password: password
+  admin:
+    password: "$2y$10$wGmIgzScW7ExkU6gPeNr9.KwmiwF3vnJ3IPasImRAr38i/TXZqloO"
+
+  # Username: developer, Password: devpass
+  developer:
+    password: "$2y$10$rcZ1nX25EHturNDkCofPsej2UsSkHnLzMyGLdbULyevuhKj/p.gEa"
+
+# Access Control List (ACL) rules
+# Rules are evaluated in order; first match wins
+acl:
+  # Admin has full access to all repositories
+  - account: "admin"
+    name: "*"
+    actions: ["*"]
+
+  # Developer can push and pull to backend-* repositories
+  - account: "developer"
+    name: "myorg/backend-*"
+    actions: ["pull", "push"]
+
+  # Developer can only pull from frontend repository
+  - account: "developer"
+    name: "myorg/frontend"
+    actions: ["pull"]
+
+  # Example: read-only access for a user
+  # - account: "readonly"
+  #   name: "myorg/*"
+  #   actions: ["pull"]
+
+# Storage configuration
+storage:
+  filesystem:
+    # Directory where images will be stored
+    rootdirectory: "/data/registry"
+
+# Authentication settings
+auth:
+  realm: "Registry"
+  service: "Docker Registry"
+  issuer: "registry-auth-server"
+
+  # RSA key paths for JWT signing (will be generated if not present)
+  private_key: "/data/keys/registry.key"
+  public_key: "/data/keys/registry.pub"

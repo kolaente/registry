@@ -1,0 +1,32 @@
+# Binaries
+registry
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test coverage
+*.out
+coverage.html
+
+# Data directories
+/data/
+
+# Configuration (use example as template)
+config.yaml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keys
+*.key
+*.pub
+*.pem

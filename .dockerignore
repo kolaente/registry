@@ -1,0 +1,30 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+PLAN.md
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+registry
+
+# Test files
+*_test.go
+testdata
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Data directories
+/data
+
+# Config (will be mounted)
+config.yaml

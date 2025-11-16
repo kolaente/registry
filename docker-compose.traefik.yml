@@ -1,0 +1,55 @@
+version: '3.8'
+
+# Docker Compose configuration with Traefik for automatic HTTPS
+# Prerequisites:
+# 1. Traefik is running on the same Docker network
+# 2. DNS is configured to point to your server
+# 3. Update the domain in the labels below
+
+services:
+  registry:
+    build: .
+    container_name: docker-registry
+    restart: unless-stopped
+    volumes:
+      - ./config.yaml:/etc/registry/config.yaml:ro
+      - registry-data:/data/registry
+      - registry-keys:/data/keys
+    environment:
+      CONFIG_PATH: /etc/registry/config.yaml
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+
+      # HTTP router
+      - "traefik.http.routers.registry.rule=Host(`registry.example.com`)"
+      - "traefik.http.routers.registry.entrypoints=websecure"
+      - "traefik.http.routers.registry.tls=true"
+      - "traefik.http.routers.registry.tls.certresolver=letsencrypt"
+
+      # Service
+      - "traefik.http.services.registry.loadbalancer.server.port=5000"
+
+      # Optional: HTTP to HTTPS redirect
+      - "traefik.http.routers.registry-http.rule=Host(`registry.example.com`)"
+      - "traefik.http.routers.registry-http.entrypoints=web"
+      - "traefik.http.routers.registry-http.middlewares=registry-redirect"
+      - "traefik.http.middlewares.registry-redirect.redirectscheme.scheme=https"
+
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  traefik:
+    external: true
+
+volumes:
+  registry-data:
+    driver: local
+  registry-keys:
+    driver: local

@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  registry:
+    build: .
+    container_name: docker-registry
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      # Mount configuration file
+      - ./config.yaml:/etc/registry/config.yaml:ro
+      # Persistent storage for images
+      - registry-data:/data/registry
+      # Persistent storage for keys
+      - registry-keys:/data/keys
+    environment:
+      CONFIG_PATH: /etc/registry/config.yaml
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  registry-data:
+    driver: local
+  registry-keys:
+    driver: local
