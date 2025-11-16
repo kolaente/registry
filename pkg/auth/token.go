@@ -99,4 +99,3 @@ func (ts *TokenService) ValidateToken(tokenString string) (*RegistryToken, error
 
 	return nil, fmt.Errorf("invalid token claims")
 }
-

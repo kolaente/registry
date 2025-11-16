@@ -181,7 +181,6 @@ func TestTokenService_TokenExpiration(t *testing.T) {
 	}
 }
 
-
 func TestAccessEntry(t *testing.T) {
 	// Test that AccessEntry can be marshaled/unmarshaled correctly
 	entry := AccessEntry{
@@ -230,7 +229,6 @@ func TestRegistryToken_Claims(t *testing.T) {
 	}
 }
 
-
 func TestTokenService_WrongSigningMethod(t *testing.T) {
 	ts, err := NewTokenService("test-issuer", "test-service", "test-secret")
 	if err != nil {
@@ -259,4 +257,3 @@ func TestTokenService_WrongSigningMethod(t *testing.T) {
 		t.Error("ValidateToken() should fail with wrong signing method")
 	}
 }
-
