@@ -117,16 +117,55 @@ storage:
 
 ### Authentication
 
+The registry supports two JWT signing methods: **RSA** (asymmetric) and **HMAC** (symmetric).
+
+#### RSA Signing (Default)
+
+Uses public/private key pairs for token signing. Best for distributed systems where tokens are validated by multiple services.
+
 ```yaml
 auth:
   realm: "Registry"
   service: "Docker Registry"
   issuer: "registry-auth-server"
+  signing_method: "rsa"  # Default, can be omitted
   private_key: "/data/keys/registry.key"
   public_key: "/data/keys/registry.pub"
 ```
 
 RSA keys are auto-generated on first run if they don't exist.
+
+#### HMAC Signing
+
+Uses a shared secret for token signing. Simpler and faster than RSA, ideal for single-server deployments.
+
+```yaml
+auth:
+  realm: "Registry"
+  service: "Docker Registry"
+  issuer: "registry-auth-server"
+  signing_method: "hmac"
+  hmac_secret: "your-secret-key-here"
+```
+
+Generate a secure HMAC secret:
+
+```bash
+openssl rand -base64 32
+```
+
+#### When to Use Each Method
+
+**Use RSA when:**
+- You have a distributed system with multiple services validating tokens
+- You need to share the public key for external token validation
+- You want asymmetric cryptography for enhanced security
+
+**Use HMAC when:**
+- Running a single-server deployment (auth and registry in one process)
+- You want simpler configuration with no key files
+- You prioritize performance (HMAC is computationally faster)
+- The secret can be kept secure within the application
 
 ## Deployment Options
 
@@ -227,7 +266,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 │    │     JWT Token Service             │   │
 │    │     - Generate tokens             │   │
 │    │     - Validate signatures         │   │
-│    │     - RSA key management          │   │
+│    │     - RSA or HMAC signing         │   │
 │    └──────┬────────────────────────────┘   │
 │           │                                │
 │    ┌──────▼──────────────────┐            │
@@ -306,7 +345,10 @@ make test-coverage
 ## Security Considerations
 
 - **Passwords**: Always use bcrypt-hashed passwords with cost ≥10
-- **Keys**: Keep RSA private keys secure; use file permissions 0600
+- **Keys & Secrets**:
+  - RSA: Keep private keys secure; use file permissions 0600
+  - HMAC: Use strong secrets (≥32 bytes); never commit to version control
+  - Rotate secrets regularly
 - **TLS**: Use HTTPS in production (Traefik, nginx, or enable built-in TLS)
 - **Network**: Run on internal network or behind reverse proxy
 - **Updates**: Pin distribution library version and review security updates

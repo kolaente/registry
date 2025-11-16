@@ -57,9 +57,19 @@ auth:
   service: "Docker Registry"
   issuer: "registry-auth-server"
 
-  # RSA key paths for JWT signing (will be generated if not present)
+  # Signing method: "rsa" or "hmac" (default: "rsa")
+  # - RSA: Asymmetric signing with public/private keys (more secure for distributed systems)
+  # - HMAC: Symmetric signing with shared secret (simpler, faster, good for single-server setups)
+  signing_method: "rsa"
+
+  # RSA key paths for JWT signing (used when signing_method = "rsa")
+  # Keys will be auto-generated if not present
   private_key: "/data/keys/registry.key"
   public_key: "/data/keys/registry.pub"
+
+  # HMAC secret for JWT signing (used when signing_method = "hmac")
+  # Generate a strong secret with: openssl rand -base64 32
+  # hmac_secret: "your-secret-key-here"
 
 # Rate limiting configuration
 rate_limit:

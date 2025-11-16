@@ -164,7 +164,7 @@ func TestTokenService_SaveAndLoadKeys(t *testing.T) {
 	}
 
 	// Load keys into new service
-	ts2, err := NewTokenServiceFromFiles("test-issuer", "test-service", privateKeyPath, publicKeyPath)
+	ts2, err := NewTokenServiceFromFiles("test-issuer", "test-service", "rsa", privateKeyPath, publicKeyPath, "")
 	if err != nil {
 		t.Fatalf("NewTokenServiceFromFiles() error = %v", err)
 	}
@@ -192,7 +192,7 @@ func TestTokenService_LoadNonexistentKeys(t *testing.T) {
 	publicKeyPath := filepath.Join(tmpDir, "nonexistent_public.key")
 
 	// Should generate new keys if files don't exist
-	ts, err := NewTokenServiceFromFiles("test-issuer", "test-service", privateKeyPath, publicKeyPath)
+	ts, err := NewTokenServiceFromFiles("test-issuer", "test-service", "rsa", privateKeyPath, publicKeyPath, "")
 	if err != nil {
 		t.Fatalf("NewTokenServiceFromFiles() should not error when keys don't exist: %v", err)
 	}
@@ -270,7 +270,7 @@ func TestTokenService_InvalidPrivateKeyFormat(t *testing.T) {
 		t.Fatalf("Failed to write invalid key: %v", err)
 	}
 
-	_, err = NewTokenServiceFromFiles("test-issuer", "test-service", privateKeyPath, "")
+	_, err = NewTokenServiceFromFiles("test-issuer", "test-service", "rsa", privateKeyPath, "", "")
 	if err == nil {
 		t.Error("NewTokenServiceFromFiles() should error with invalid key format")
 	}
@@ -351,7 +351,7 @@ func TestNewTokenServiceFromFiles_PKCS8(t *testing.T) {
 	}
 
 	// Load it
-	ts2, err := NewTokenServiceFromFiles("test-issuer", "test-service", privateKeyPath, "")
+	ts2, err := NewTokenServiceFromFiles("test-issuer", "test-service", "rsa", privateKeyPath, "", "")
 	if err != nil {
 		t.Fatalf("NewTokenServiceFromFiles() error = %v", err)
 	}
@@ -389,7 +389,7 @@ func TestNewTokenServiceFromFiles_InvalidRSAKey(t *testing.T) {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	_, err = NewTokenServiceFromFiles("test-issuer", "test-service", keyPath, "")
+	_, err = NewTokenServiceFromFiles("test-issuer", "test-service", "rsa", keyPath, "", "")
 	if err == nil {
 		t.Error("NewTokenServiceFromFiles() should error with invalid RSA key")
 	}
@@ -419,5 +419,183 @@ func TestTokenService_WrongSigningMethod(t *testing.T) {
 	_, err = ts.ValidateToken(tokenString)
 	if err == nil {
 		t.Error("ValidateToken() should fail with wrong signing method")
+	}
+}
+
+// HMAC Signing Method Tests
+
+func TestNewTokenServiceFromFiles_HMAC(t *testing.T) {
+	hmacSecret := "test-secret-key-for-hmac-signing"
+
+	ts, err := NewTokenServiceFromFiles("test-issuer", "test-service", "hmac", "", "", hmacSecret)
+	if err != nil {
+		t.Fatalf("NewTokenServiceFromFiles() error = %v", err)
+	}
+
+	if ts.signingMethod != "hmac" {
+		t.Errorf("signingMethod = %v, want hmac", ts.signingMethod)
+	}
+	if string(ts.hmacSecret) != hmacSecret {
+		t.Errorf("hmacSecret not set correctly")
+	}
+	if ts.privateKey != nil {
+		t.Error("privateKey should be nil for HMAC signing")
+	}
+	if ts.publicKey != nil {
+		t.Error("publicKey should be nil for HMAC signing")
+	}
+}
+
+func TestTokenService_HMAC_GenerateAndValidate(t *testing.T) {
+	hmacSecret := "my-super-secret-hmac-key"
+
+	ts, err := NewTokenServiceFromFiles("test-issuer", "test-service", "hmac", "", "", hmacSecret)
+	if err != nil {
+		t.Fatalf("NewTokenServiceFromFiles() error = %v", err)
+	}
+
+	access := []AccessEntry{
+		{
+			Type:    "repository",
+			Name:    "myorg/app",
+			Actions: []string{"pull", "push"},
+		},
+	}
+
+	// Generate token with HMAC
+	tokenString, err := ts.GenerateToken("testuser", access)
+	if err != nil {
+		t.Fatalf("GenerateToken() error = %v", err)
+	}
+
+	if tokenString == "" {
+		t.Error("GenerateToken() returned empty token")
+	}
+
+	// Validate token
+	claims, err := ts.ValidateToken(tokenString)
+	if err != nil {
+		t.Fatalf("ValidateToken() error = %v", err)
+	}
+
+	if claims.Subject != "testuser" {
+		t.Errorf("Subject = %v, want testuser", claims.Subject)
+	}
+	if len(claims.Access) != 1 {
+		t.Fatalf("len(Access) = %v, want 1", len(claims.Access))
+	}
+	if claims.Access[0].Name != "myorg/app" {
+		t.Errorf("Access[0].Name = %v, want myorg/app", claims.Access[0].Name)
+	}
+}
+
+func TestTokenService_HMAC_WrongSecret(t *testing.T) {
+	// Create two token services with different secrets
+	ts1, err := NewTokenServiceFromFiles("test-issuer", "test-service", "hmac", "", "", "secret1")
+	if err != nil {
+		t.Fatalf("NewTokenServiceFromFiles() error = %v", err)
+	}
+
+	ts2, err := NewTokenServiceFromFiles("test-issuer", "test-service", "hmac", "", "", "secret2")
+	if err != nil {
+		t.Fatalf("NewTokenServiceFromFiles() error = %v", err)
+	}
+
+	// Generate token with ts1
+	token, err := ts1.GenerateToken("testuser", nil)
+	if err != nil {
+		t.Fatalf("GenerateToken() error = %v", err)
+	}
+
+	// Try to validate with ts2 (different secret)
+	_, err = ts2.ValidateToken(token)
+	if err == nil {
+		t.Error("ValidateToken() should fail with wrong HMAC secret")
+	}
+}
+
+func TestTokenService_HMAC_EmptySecret(t *testing.T) {
+	_, err := NewTokenServiceFromFiles("test-issuer", "test-service", "hmac", "", "", "")
+	if err == nil {
+		t.Error("NewTokenServiceFromFiles() should error with empty HMAC secret")
+	}
+}
+
+func TestTokenService_HMAC_ValidateRSAToken(t *testing.T) {
+	// Create RSA token service
+	rsaTS, err := NewTokenService("test-issuer", "test-service")
+	if err != nil {
+		t.Fatalf("NewTokenService() error = %v", err)
+	}
+
+	// Generate RSA token
+	rsaToken, err := rsaTS.GenerateToken("testuser", nil)
+	if err != nil {
+		t.Fatalf("GenerateToken() error = %v", err)
+	}
+
+	// Create HMAC token service
+	hmacTS, err := NewTokenServiceFromFiles("test-issuer", "test-service", "hmac", "", "", "secret")
+	if err != nil {
+		t.Fatalf("NewTokenServiceFromFiles() error = %v", err)
+	}
+
+	// Try to validate RSA token with HMAC service - should fail
+	_, err = hmacTS.ValidateToken(rsaToken)
+	if err == nil {
+		t.Error("ValidateToken() should fail when trying to validate RSA token with HMAC service")
+	}
+}
+
+func TestTokenService_RSA_ValidateHMACToken(t *testing.T) {
+	// Create HMAC token service
+	hmacTS, err := NewTokenServiceFromFiles("test-issuer", "test-service", "hmac", "", "", "secret")
+	if err != nil {
+		t.Fatalf("NewTokenServiceFromFiles() error = %v", err)
+	}
+
+	// Generate HMAC token
+	hmacToken, err := hmacTS.GenerateToken("testuser", nil)
+	if err != nil {
+		t.Fatalf("GenerateToken() error = %v", err)
+	}
+
+	// Create RSA token service
+	rsaTS, err := NewTokenService("test-issuer", "test-service")
+	if err != nil {
+		t.Fatalf("NewTokenService() error = %v", err)
+	}
+
+	// Try to validate HMAC token with RSA service - should fail
+	_, err = rsaTS.ValidateToken(hmacToken)
+	if err == nil {
+		t.Error("ValidateToken() should fail when trying to validate HMAC token with RSA service")
+	}
+}
+
+func TestTokenService_HMAC_TokenExpiration(t *testing.T) {
+	ts, err := NewTokenServiceFromFiles("test-issuer", "test-service", "hmac", "", "", "secret")
+	if err != nil {
+		t.Fatalf("NewTokenServiceFromFiles() error = %v", err)
+	}
+
+	token, err := ts.GenerateToken("testuser", nil)
+	if err != nil {
+		t.Fatalf("GenerateToken() error = %v", err)
+	}
+
+	claims, err := ts.ValidateToken(token)
+	if err != nil {
+		t.Fatalf("ValidateToken() error = %v", err)
+	}
+
+	// Check expiration is set to ~5 minutes from now
+	expiresAt := claims.ExpiresAt.Time
+	now := time.Now()
+	expectedExpiry := now.Add(5 * time.Minute)
+
+	// Allow 10 second variance
+	if expiresAt.Before(expectedExpiry.Add(-10*time.Second)) || expiresAt.After(expectedExpiry.Add(10*time.Second)) {
+		t.Errorf("ExpiresAt = %v, want ~%v", expiresAt, expectedExpiry)
 	}
 }

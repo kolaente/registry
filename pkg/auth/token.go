@@ -14,13 +14,21 @@ import (
 
 // TokenService handles JWT token generation and validation
 type TokenService struct {
+	// RSA keys (for asymmetric signing)
 	privateKey *rsa.PrivateKey
 	publicKey  *rsa.PublicKey
-	issuer     string
-	service    string
+
+	// HMAC secret (for symmetric signing)
+	hmacSecret []byte
+
+	// Signing method: "rsa" or "hmac"
+	signingMethod string
+
+	issuer  string
+	service string
 }
 
-// NewTokenService creates a new token service
+// NewTokenService creates a new token service with RSA signing (for backward compatibility)
 func NewTokenService(issuer, service string) (*TokenService, error) {
 	// Generate a new RSA key pair
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -29,20 +37,32 @@ func NewTokenService(issuer, service string) (*TokenService, error) {
 	}
 
 	return &TokenService{
-		privateKey: privateKey,
-		publicKey:  &privateKey.PublicKey,
-		issuer:     issuer,
-		service:    service,
+		privateKey:    privateKey,
+		publicKey:     &privateKey.PublicKey,
+		signingMethod: "rsa",
+		issuer:        issuer,
+		service:       service,
 	}, nil
 }
 
-// NewTokenServiceFromFiles creates a token service from key files
-func NewTokenServiceFromFiles(issuer, service, privateKeyPath, publicKeyPath string) (*TokenService, error) {
+// NewTokenServiceFromFiles creates a token service from configuration
+func NewTokenServiceFromFiles(issuer, service, signingMethod, privateKeyPath, publicKeyPath, hmacSecret string) (*TokenService, error) {
 	ts := &TokenService{
-		issuer:  issuer,
-		service: service,
+		issuer:        issuer,
+		service:       service,
+		signingMethod: signingMethod,
 	}
 
+	// Handle HMAC signing method
+	if signingMethod == "hmac" {
+		if hmacSecret == "" {
+			return nil, fmt.Errorf("HMAC secret is required when using HMAC signing method")
+		}
+		ts.hmacSecret = []byte(hmacSecret)
+		return ts, nil
+	}
+
+	// Handle RSA signing method (default)
 	// Load private key
 	if privateKeyPath != "" {
 		privateKeyData, err := os.ReadFile(privateKeyPath)
@@ -146,18 +166,38 @@ func (ts *TokenService) GenerateToken(account string, access []AccessEntry) (str
 		Access: access,
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	return token.SignedString(ts.privateKey)
+	// Choose signing method based on configuration
+	var token *jwt.Token
+	var signingKey interface{}
+
+	if ts.signingMethod == "hmac" {
+		token = jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		signingKey = ts.hmacSecret
+	} else {
+		// Default to RSA
+		token = jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		signingKey = ts.privateKey
+	}
+
+	return token.SignedString(signingKey)
 }
 
 // ValidateToken validates a JWT token and returns the claims
 func (ts *TokenService) ValidateToken(tokenString string) (*RegistryToken, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &RegistryToken{}, func(token *jwt.Token) (interface{}, error) {
-		// Verify signing method
-		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		// Verify signing method matches our configuration
+		if ts.signingMethod == "hmac" {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v (expected HMAC)", token.Header["alg"])
+			}
+			return ts.hmacSecret, nil
+		} else {
+			// RSA validation
+			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v (expected RSA)", token.Header["alg"])
+			}
+			return ts.publicKey, nil
 		}
-		return ts.publicKey, nil
 	})
 
 	if err != nil {

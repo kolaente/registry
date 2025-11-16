@@ -54,11 +54,17 @@ type FilesystemStorage struct {
 
 // AuthConfig holds authentication settings
 type AuthConfig struct {
-	Realm      string `yaml:"realm"`
-	Service    string `yaml:"service"`
-	Issuer     string `yaml:"issuer"`
+	Realm         string `yaml:"realm"`
+	Service       string `yaml:"service"`
+	Issuer        string `yaml:"issuer"`
+	SigningMethod string `yaml:"signing_method"` // "rsa" or "hmac" (default: "rsa")
+
+	// RSA keys (used when signing_method = "rsa")
 	PrivateKey string `yaml:"private_key"` // Path to RSA private key
 	PublicKey  string `yaml:"public_key"`  // Path to RSA public key
+
+	// HMAC secret (used when signing_method = "hmac")
+	HMACSecret string `yaml:"hmac_secret"` // HMAC secret key
 }
 
 // RateLimitConfig holds rate limiting settings
@@ -93,6 +99,9 @@ func Load(path string) (*Config, error) {
 	if cfg.Auth.Issuer == "" {
 		cfg.Auth.Issuer = "registry-auth-server"
 	}
+	if cfg.Auth.SigningMethod == "" {
+		cfg.Auth.SigningMethod = "rsa" // Default to RSA for backward compatibility
+	}
 	if cfg.Storage.Filesystem.RootDirectory == "" {
 		cfg.Storage.Filesystem.RootDirectory = "/data/registry"
 	}
@@ -116,6 +125,18 @@ func (c *Config) Validate() error {
 
 	if c.Storage.Filesystem.RootDirectory == "" {
 		return fmt.Errorf("storage root directory must be set")
+	}
+
+	// Validate authentication configuration
+	// Empty signing_method is allowed (defaults to "rsa" in Load)
+	if c.Auth.SigningMethod != "" && c.Auth.SigningMethod != "rsa" && c.Auth.SigningMethod != "hmac" {
+		return fmt.Errorf("auth.signing_method must be either 'rsa' or 'hmac', got: %s", c.Auth.SigningMethod)
+	}
+
+	if c.Auth.SigningMethod == "hmac" {
+		if c.Auth.HMACSecret == "" {
+			return fmt.Errorf("auth.hmac_secret must be provided when signing_method is 'hmac'")
+		}
 	}
 
 	// Validate ACL rules
