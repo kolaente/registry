@@ -1,13 +1,8 @@
 package auth
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -15,128 +10,29 @@ import (
 
 // TokenService handles JWT token generation and validation
 type TokenService struct {
-	// RSA keys (for asymmetric signing)
-	privateKey *rsa.PrivateKey
-	publicKey  *rsa.PublicKey
-
 	// HMAC secret (for symmetric signing)
 	hmacSecret []byte
-
-	// Signing method: "rsa" or "hmac"
-	signingMethod string
 
 	issuer  string
 	service string
 }
 
-// NewTokenService creates a new token service with RSA signing (for backward compatibility)
-func NewTokenService(issuer, service string) (*TokenService, error) {
-	// Generate a new RSA key pair
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate RSA key: %w", err)
+// NewTokenService creates a new token service with HMAC signing
+func NewTokenService(issuer, service, hmacSecret string) (*TokenService, error) {
+	if hmacSecret == "" {
+		return nil, fmt.Errorf("HMAC secret is required")
 	}
 
 	return &TokenService{
-		privateKey:    privateKey,
-		publicKey:     &privateKey.PublicKey,
-		signingMethod: "rsa",
-		issuer:        issuer,
-		service:       service,
+		hmacSecret: []byte(hmacSecret),
+		issuer:     issuer,
+		service:    service,
 	}, nil
 }
 
-// NewTokenServiceFromFiles creates a token service from configuration
-func NewTokenServiceFromFiles(issuer, service, signingMethod, privateKeyPath, publicKeyPath, hmacSecret string) (*TokenService, error) {
-	ts := &TokenService{
-		issuer:        issuer,
-		service:       service,
-		signingMethod: signingMethod,
-	}
-
-	// Handle HMAC signing method
-	if signingMethod == "hmac" {
-		if hmacSecret == "" {
-			return nil, fmt.Errorf("HMAC secret is required when using HMAC signing method")
-		}
-		ts.hmacSecret = []byte(hmacSecret)
-		return ts, nil
-	}
-
-	// Handle RSA signing method (default)
-	// Load private key
-	if privateKeyPath != "" {
-		privateKeyData, err := os.ReadFile(privateKeyPath)
-		if err != nil {
-			// If file doesn't exist, we'll generate new keys later
-			if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("failed to read private key: %w", err)
-			}
-		} else {
-			block, _ := pem.Decode(privateKeyData)
-			if block == nil {
-				return nil, fmt.Errorf("failed to decode PEM block from private key")
-			}
-
-			privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-			if err != nil {
-				// Try PKCS8 format
-				key, err2 := x509.ParsePKCS8PrivateKey(block.Bytes)
-				if err2 != nil {
-					return nil, fmt.Errorf("failed to parse private key: %w", err)
-				}
-				var ok bool
-				privateKey, ok = key.(*rsa.PrivateKey)
-				if !ok {
-					return nil, fmt.Errorf("key is not RSA private key")
-				}
-			}
-
-			ts.privateKey = privateKey
-			ts.publicKey = &privateKey.PublicKey
-		}
-	}
-
-	// Load public key if provided separately
-	if publicKeyPath != "" && privateKeyPath == "" {
-		publicKeyData, err := os.ReadFile(publicKeyPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read public key: %w", err)
-		}
-
-		block, _ := pem.Decode(publicKeyData)
-		if block == nil {
-			return nil, fmt.Errorf("failed to decode PEM block from public key")
-		}
-
-		publicKey, err := x509.ParsePKCS1PublicKey(block.Bytes)
-		if err != nil {
-			// Try PKIX format
-			key, err2 := x509.ParsePKIXPublicKey(block.Bytes)
-			if err2 != nil {
-				return nil, fmt.Errorf("failed to parse public key: %w", err)
-			}
-			var ok bool
-			publicKey, ok = key.(*rsa.PublicKey)
-			if !ok {
-				return nil, fmt.Errorf("key is not RSA public key")
-			}
-		}
-
-		ts.publicKey = publicKey
-	}
-
-	// If no keys provided, generate new ones
-	if ts.privateKey == nil && ts.publicKey == nil {
-		privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate RSA key: %w", err)
-		}
-		ts.privateKey = privateKey
-		ts.publicKey = &privateKey.PublicKey
-	}
-
-	return ts, nil
+// NewTokenServiceFromConfig creates a token service from configuration
+func NewTokenServiceFromConfig(issuer, service, hmacSecret string) (*TokenService, error) {
+	return NewTokenService(issuer, service, hmacSecret)
 }
 
 // RegistryToken represents the JWT claims for Docker registry authentication
@@ -167,38 +63,18 @@ func (ts *TokenService) GenerateToken(account string, access []AccessEntry) (str
 		Access: access,
 	}
 
-	// Choose signing method based on configuration
-	var token *jwt.Token
-	var signingKey interface{}
-
-	if ts.signingMethod == "hmac" {
-		token = jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-		signingKey = ts.hmacSecret
-	} else {
-		// Default to RSA
-		token = jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-		signingKey = ts.privateKey
-	}
-
-	return token.SignedString(signingKey)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(ts.hmacSecret)
 }
 
 // ValidateToken validates a JWT token and returns the claims
 func (ts *TokenService) ValidateToken(tokenString string) (*RegistryToken, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &RegistryToken{}, func(token *jwt.Token) (interface{}, error) {
-		// Verify signing method matches our configuration
-		if ts.signingMethod == "hmac" {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("unexpected signing method: %v (expected HMAC)", token.Header["alg"])
-			}
-			return ts.hmacSecret, nil
-		} else {
-			// RSA validation
-			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-				return nil, fmt.Errorf("unexpected signing method: %v (expected RSA)", token.Header["alg"])
-			}
-			return ts.publicKey, nil
+		// Verify signing method is HMAC
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v (expected HMAC)", token.Header["alg"])
 		}
+		return ts.hmacSecret, nil
 	})
 
 	if err != nil {
@@ -224,48 +100,3 @@ func (ts *TokenService) ValidateToken(tokenString string) (*RegistryToken, error
 	return nil, fmt.Errorf("invalid token claims")
 }
 
-// GetPublicKey returns the PEM-encoded public key
-func (ts *TokenService) GetPublicKey() ([]byte, error) {
-	publicKeyBytes, err := x509.MarshalPKIXPublicKey(ts.publicKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal public key: %w", err)
-	}
-
-	publicKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "PUBLIC KEY",
-		Bytes: publicKeyBytes,
-	})
-
-	return publicKeyPEM, nil
-}
-
-// SaveKeys saves the private and public keys to files
-func (ts *TokenService) SaveKeys(privateKeyPath, publicKeyPath string) error {
-	// Save private key
-	privateKeyBytes := x509.MarshalPKCS1PrivateKey(ts.privateKey)
-	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: privateKeyBytes,
-	})
-
-	if err := os.WriteFile(privateKeyPath, privateKeyPEM, 0600); err != nil {
-		return fmt.Errorf("failed to write private key: %w", err)
-	}
-
-	// Save public key
-	publicKeyBytes, err := x509.MarshalPKIXPublicKey(ts.publicKey)
-	if err != nil {
-		return fmt.Errorf("failed to marshal public key: %w", err)
-	}
-
-	publicKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "PUBLIC KEY",
-		Bytes: publicKeyBytes,
-	})
-
-	if err := os.WriteFile(publicKeyPath, publicKeyPEM, 0644); err != nil {
-		return fmt.Errorf("failed to write public key: %w", err)
-	}
-
-	return nil
-}
