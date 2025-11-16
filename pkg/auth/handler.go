@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/kolaente/registry/pkg/acl"
 	"github.com/kolaente/registry/pkg/config"
@@ -141,7 +142,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Token:       token,
 		AccessToken: token,
 		ExpiresIn:   300, // 5 minutes
-		IssuedAt:    "",  // Optional
+		IssuedAt:    time.Now().UTC().Format(time.RFC3339),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
