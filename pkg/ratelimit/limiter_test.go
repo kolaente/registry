@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kolaente/registry/pkg/utils"
 	"golang.org/x/time/rate"
 )
 
@@ -73,7 +74,7 @@ func TestGetIP_XForwardedFor(t *testing.T) {
 	req.Header.Set("X-Forwarded-For", "203.0.113.1")
 	req.RemoteAddr = "192.168.1.1:12345"
 
-	ip := getIP(req)
+	ip := utils.GetClientIP(req)
 	if ip != "203.0.113.1" {
 		t.Errorf("Expected 203.0.113.1, got %s", ip)
 	}
@@ -84,7 +85,7 @@ func TestGetIP_XRealIP(t *testing.T) {
 	req.Header.Set("X-Real-IP", "203.0.113.2")
 	req.RemoteAddr = "192.168.1.1:12345"
 
-	ip := getIP(req)
+	ip := utils.GetClientIP(req)
 	if ip != "203.0.113.2" {
 		t.Errorf("Expected 203.0.113.2, got %s", ip)
 	}
@@ -94,7 +95,7 @@ func TestGetIP_RemoteAddr(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test", nil)
 	req.RemoteAddr = "192.168.1.1:12345"
 
-	ip := getIP(req)
+	ip := utils.GetClientIP(req)
 	if ip != "192.168.1.1" {
 		t.Errorf("Expected 192.168.1.1, got %s", ip)
 	}
