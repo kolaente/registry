@@ -1,7 +1,10 @@
 package ratelimit
 
 import (
+	"encoding/json"
+	"math"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -78,14 +81,71 @@ func (l *Limiter) cleanupVisitors() {
 	}
 }
 
-// Middleware returns an HTTP middleware that enforces rate limiting
+// calculateResetTime calculates seconds until the bucket is full
+func (l *Limiter) calculateResetTime(currentTokens int) int {
+	if currentTokens >= l.burst {
+		return 0
+	}
+	tokensNeeded := l.burst - currentTokens
+	secondsToFill := float64(tokensNeeded) / float64(l.rate)
+	return int(math.Ceil(secondsToFill))
+}
+
+// Middleware returns an HTTP middleware that enforces rate limiting.
+// It adds rate limit headers to all responses and returns 429 Too Many Requests
+// when the rate limit is exceeded.
+//
+// Headers added to all responses:
+//   - RateLimit-Limit: Maximum requests allowed (burst size)
+//   - RateLimit-Remaining: Requests remaining in current period
+//   - RateLimit-Reset: Seconds until full capacity is restored
+//   - X-RateLimit-* variants for legacy compatibility
+//
+// When rate limited (429 response):
+//   - Retry-After: Seconds to wait before retrying
+//   - JSON body with error details
+//
+// The rate limiter uses a token bucket algorithm that refills continuously
+// at the configured rate (requests per second). This means clients can make
+// requests as soon as they have available tokens, rather than waiting for
+// discrete time windows.
 func (l *Limiter) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := utils.GetClientIP(r)
 		limiter := l.getVisitor(ip)
 
+		// Get current state before checking allowance
+		tokens := limiter.Tokens()
+		remaining := int(tokens)
+		if remaining < 0 {
+			remaining = 0
+		}
+		resetSeconds := l.calculateResetTime(remaining)
+
+		// Add standard headers (IETF draft RFC)
+		w.Header().Set("RateLimit-Limit", strconv.Itoa(l.burst))
+		w.Header().Set("RateLimit-Remaining", strconv.Itoa(remaining))
+		w.Header().Set("RateLimit-Reset", strconv.Itoa(resetSeconds))
+
+		// Add legacy headers (for compatibility)
+		w.Header().Set("X-RateLimit-Limit", strconv.Itoa(l.burst))
+		w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+		resetTime := time.Now().Add(time.Duration(resetSeconds) * time.Second)
+		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetTime.Unix(), 10))
+
 		if !limiter.Allow() {
-			http.Error(w, "Rate limit exceeded. Please try again later.", http.StatusTooManyRequests)
+			retryAfter := int(math.Ceil(1.0 / float64(l.rate)))
+			w.Header().Set("Retry-After", strconv.Itoa(retryAfter))
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":       "rate_limit_exceeded",
+				"message":     "Rate limit exceeded. Please try again later.",
+				"retry_after": retryAfter,
+				"limit":       l.burst,
+				"reset":       time.Now().Add(time.Duration(retryAfter) * time.Second).UTC().Format(time.RFC3339),
+			})
 			return
 		}
 
