@@ -249,7 +249,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 ### Prerequisites
 
-- Go 1.23+
+- Go 1.25+
 - Docker (for testing)
 
 ### Build
@@ -279,12 +279,6 @@ go test -race ./pkg/...
 # Generate coverage report
 make test-coverage
 ```
-
-**Test Coverage:**
-- ACL Matcher: 97.4%
-- Authentication: 80.6%
-- Configuration: 100%
-- Overall: High coverage across all core packages
 
 ### Project Structure
 
