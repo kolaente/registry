@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -13,6 +14,20 @@ import (
 	"github.com/kolaente/registry/pkg/utils"
 	"golang.org/x/crypto/bcrypt"
 )
+
+var (
+	// Regex to extract repository name from Docker Registry V2 API paths
+	repoPathRegex = regexp.MustCompile(`^/v2/([^/]+(?:/[^/]+)*?)/(manifests|blobs|tags)`)
+)
+
+// extractRepositoryFromPath extracts the repository name from a Docker Registry V2 API path
+func extractRepositoryFromPath(path string) string {
+	matches := repoPathRegex.FindStringSubmatch(path)
+	if len(matches) >= 2 {
+		return matches[1]
+	}
+	return ""
+}
 
 // Handler handles authentication requests
 type Handler struct {
@@ -172,6 +187,32 @@ func NewAuthMiddleware(tokenService *TokenService, service string) *AuthMiddlewa
 	}
 }
 
+func getAuthHeaderFromRepoContext(r *http.Request) string {
+	// Construct the full token URL from the request
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	tokenURL := fmt.Sprintf("%s://%s/v2/token", scheme, r.Host)
+
+	// Extract repository name from path and build scope
+	var wwwAuthHeader string
+	repoName := extractRepositoryFromPath(r.URL.Path)
+	if repoName != "" {
+		// Determine actions based on HTTP method
+		actions := "pull"
+		if r.Method == "POST" || r.Method == "PUT" || r.Method == "PATCH" || r.Method == "DELETE" {
+			actions = "pull,push"
+		}
+		scope := fmt.Sprintf("repository:%s:%s", repoName, actions)
+		return fmt.Sprintf(`Bearer realm="%s",service="%s",scope="%s"`, tokenURL, am.service, scope)
+	}
+
+	// Fallback without scope if we can't parse the repo name
+	return fmt.Sprintf(`Bearer realm="%s",service="%s"`, tokenURL, am.service)
+
+}
+
 // Middleware returns an HTTP middleware that validates tokens
 func (am *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -184,39 +225,31 @@ func (am *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 		// Get authorization header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			// Check if this is a pull request (GET) - some clients don't send auth for public repos
-			// For now, require auth for all requests
-			log.Printf("Authentication failed: no Bearer token provided for %s %s from %s",
-				r.Method, r.URL.Path, utils.GetClientIP(r))
-			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="/v2/token",service="%s"`, am.service))
+			wwwAuthHeader := getAuthHeaderFromRepoContext(r)
+			w.Header().Set("WWW-Authenticate", wwwAuthHeader)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
 			return
 		}
 
 		// Parse Bearer token
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			log.Printf("Authentication failed: invalid/malformed authorization header for %s %s from %s (header: %s)",
-				r.Method, r.URL.Path, utils.GetClientIP(r), authHeader)
 			http.Error(w, "Invalid authorization header", http.StatusUnauthorized)
 			return
 		}
 
 		// Validate token
-		claims, err := am.tokenService.ValidateToken(parts[1])
+		_, err := am.tokenService.ValidateToken(parts[1])
 		if err != nil {
-			// Log detailed token validation failure
-			log.Printf("Authentication failed: token validation failed for %s %s from %s: %v",
-				r.Method, r.URL.Path, utils.GetClientIP(r), err)
-			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer realm="/v2/token",service="%s"`, am.service))
+			wwwAuthHeader := getAuthHeaderFromRepoContext(r)
+			w.Header().Set("WWW-Authenticate", wwwAuthHeader)
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
+
 			return
 		}
 
-		// Token is valid - you could add claims to request context here if needed
-		log.Printf("Token validation successful for user '%s' accessing %s %s from %s",
-			claims.Subject, r.Method, r.URL.Path, utils.GetClientIP(r))
-
+		// Token is valid
 		next.ServeHTTP(w, r)
 	})
 }
