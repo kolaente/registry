@@ -60,3 +60,9 @@ auth:
   # RSA key paths for JWT signing (will be generated if not present)
   private_key: "/data/keys/registry.key"
   public_key: "/data/keys/registry.pub"
+
+# Rate limiting configuration
+rate_limit:
+  enabled: true
+  requests_per_sec: 10  # Requests per second per IP address
+  burst: 20             # Maximum burst size (allows temporary spikes)

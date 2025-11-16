@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/kolaente/registry/pkg/acl"
 	"github.com/kolaente/registry/pkg/config"
@@ -402,5 +403,115 @@ func TestAuthMiddleware_Middleware_InvalidAuthHeader(t *testing.T) {
 				t.Error("next handler should not be called with invalid auth header")
 			}
 		})
+	}
+}
+
+func TestHandler_ServeHTTP_ConstantTime(t *testing.T) {
+	// Setup
+	tokenService, err := NewTokenService("test-issuer", "test-service")
+	if err != nil {
+		t.Fatalf("NewTokenService() error = %v", err)
+	}
+
+	aclRules := []config.ACLRule{
+		{Account: "validuser", Name: "*", Actions: []string{"*"}},
+	}
+	aclMatcher := acl.NewMatcher(aclRules)
+
+	passwordHash, _ := bcrypt.GenerateFromPassword([]byte("password"), bcrypt.DefaultCost)
+	users := map[string]config.User{
+		"validuser": {Password: string(passwordHash)},
+	}
+
+	handler := NewHandler(tokenService, aclMatcher, users, "Test Realm", "test-service")
+
+	// Test 1: Valid user with wrong password
+	req1 := httptest.NewRequest("GET", "/v2/token", nil)
+	req1.SetBasicAuth("validuser", "wrongpassword")
+	w1 := httptest.NewRecorder()
+
+	start1 := time.Now()
+	handler.ServeHTTP(w1, req1)
+	duration1 := time.Since(start1)
+
+	// Test 2: Non-existent user
+	req2 := httptest.NewRequest("GET", "/v2/token", nil)
+	req2.SetBasicAuth("nonexistentuser", "wrongpassword")
+	w2 := httptest.NewRecorder()
+
+	start2 := time.Now()
+	handler.ServeHTTP(w2, req2)
+	duration2 := time.Since(start2)
+
+	// Both should return 401
+	if w1.Code != http.StatusUnauthorized {
+		t.Errorf("Valid user with wrong password: expected 401, got %d", w1.Code)
+	}
+	if w2.Code != http.StatusUnauthorized {
+		t.Errorf("Non-existent user: expected 401, got %d", w2.Code)
+	}
+
+	// Timing should be similar (within reasonable margin)
+	// bcrypt takes ~100-200ms, so we expect both to be in that range
+	timeDiff := duration1 - duration2
+	if timeDiff < 0 {
+		timeDiff = -timeDiff
+	}
+
+	// Allow up to 50ms difference (due to system variance)
+	maxAcceptableDiff := 50 * time.Millisecond
+	if timeDiff > maxAcceptableDiff {
+		t.Logf("WARNING: Timing difference detected - valid user: %v, invalid user: %v, diff: %v",
+			duration1, duration2, timeDiff)
+		t.Logf("This may indicate a timing attack vulnerability")
+	}
+
+	// Both should take at least 50ms (bcrypt should be slow)
+	minExpectedDuration := 50 * time.Millisecond
+	if duration1 < minExpectedDuration || duration2 < minExpectedDuration {
+		t.Errorf("Responses too fast - bcrypt may not be running for both cases")
+	}
+}
+
+func TestHandler_ServeHTTP_ValidCredentials(t *testing.T) {
+	// Setup
+	tokenService, err := NewTokenService("test-issuer", "test-service")
+	if err != nil {
+		t.Fatalf("NewTokenService() error = %v", err)
+	}
+
+	aclRules := []config.ACLRule{
+		{Account: "validuser", Name: "*", Actions: []string{"*"}},
+	}
+	aclMatcher := acl.NewMatcher(aclRules)
+
+	passwordHash, _ := bcrypt.GenerateFromPassword([]byte("password"), bcrypt.DefaultCost)
+	users := map[string]config.User{
+		"validuser": {Password: string(passwordHash)},
+	}
+
+	handler := NewHandler(tokenService, aclMatcher, users, "Test Realm", "test-service")
+
+	// Test with valid credentials
+	req := httptest.NewRequest("GET", "/v2/token?scope=repository:test:pull", nil)
+	req.SetBasicAuth("validuser", "password")
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	// Should succeed
+	if w.Code != http.StatusOK {
+		t.Errorf("Valid credentials: expected 200, got %d", w.Code)
+	}
+
+	// Should return valid token
+	var response TokenResponse
+	err = json.NewDecoder(w.Body).Decode(&response)
+	if err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if response.Token == "" {
+		t.Error("Token should not be empty")
 	}
 }

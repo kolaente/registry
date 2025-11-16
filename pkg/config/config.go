@@ -9,11 +9,12 @@ import (
 
 // Config represents the main configuration structure
 type Config struct {
-	Server  ServerConfig         `yaml:"server"`
-	Users   map[string]User      `yaml:"users"`
-	ACL     []ACLRule            `yaml:"acl"`
-	Storage StorageConfig        `yaml:"storage"`
-	Auth    AuthConfig           `yaml:"auth"`
+	Server    ServerConfig      `yaml:"server"`
+	Users     map[string]User   `yaml:"users"`
+	ACL       []ACLRule         `yaml:"acl"`
+	Storage   StorageConfig     `yaml:"storage"`
+	Auth      AuthConfig        `yaml:"auth"`
+	RateLimit RateLimitConfig   `yaml:"rate_limit"`
 }
 
 // ServerConfig holds server-specific settings
@@ -60,6 +61,13 @@ type AuthConfig struct {
 	PublicKey  string `yaml:"public_key"`  // Path to RSA public key
 }
 
+// RateLimitConfig holds rate limiting settings
+type RateLimitConfig struct {
+	Enabled        bool    `yaml:"enabled"`          // Enable/disable rate limiting
+	RequestsPerSec float64 `yaml:"requests_per_sec"` // Requests per second per IP
+	Burst          int     `yaml:"burst"`            // Burst size
+}
+
 // Load reads and parses the configuration file
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -87,6 +95,14 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Storage.Filesystem.RootDirectory == "" {
 		cfg.Storage.Filesystem.RootDirectory = "/data/registry"
+	}
+
+	// Rate limit defaults
+	if cfg.RateLimit.RequestsPerSec == 0 {
+		cfg.RateLimit.RequestsPerSec = 10 // 10 requests/sec default
+	}
+	if cfg.RateLimit.Burst == 0 {
+		cfg.RateLimit.Burst = 20 // Burst of 20 requests
 	}
 
 	return &cfg, nil

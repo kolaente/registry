@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
@@ -50,18 +51,33 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify credentials
+	// Pre-computed dummy hash for timing attack mitigation
+	// Generated with: echo "dummy" | htpasswd -nbBC 10 dummy | cut -d: -f2
+	// This ensures constant-time behavior even for non-existent users
+	const dummyHash = "$2y$10$7YvdPKKXgNfU/ZrLnVPPIu5D8F6cQvKb6zWzNsLKJXZ9YvKQvZKgW"
+
+	// Get user or prepare for constant-time comparison
 	user, exists := h.users[username]
-	if !exists {
+	hashToCheck := dummyHash
+	if exists {
+		hashToCheck = user.Password
+	}
+
+	// ALWAYS perform bcrypt comparison to ensure constant-time behavior
+	// This prevents timing attacks that could be used to enumerate usernames
+	err := bcrypt.CompareHashAndPassword([]byte(hashToCheck), []byte(password))
+
+	// Only proceed if user exists AND password is correct
+	if !exists || err != nil {
+		// Log failed authentication attempt
+		log.Printf("Failed authentication attempt for user '%s' from %s (user_exists=%v)",
+			username, getClientIP(r), exists)
 		h.unauthorized(w, "Invalid credentials")
 		return
 	}
 
-	// Check password
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-		h.unauthorized(w, "Invalid credentials")
-		return
-	}
+	// Log successful authentication
+	log.Printf("Successful authentication for user '%s' from %s", username, getClientIP(r))
 
 	// Parse scope to determine requested access
 	var accessEntries []AccessEntry
@@ -182,4 +198,22 @@ func (am *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// getClientIP extracts the client IP from the request
+func getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header (if behind proxy)
+	forwarded := r.Header.Get("X-Forwarded-For")
+	if forwarded != "" {
+		return forwarded
+	}
+
+	// Check X-Real-IP header
+	realIP := r.Header.Get("X-Real-IP")
+	if realIP != "" {
+		return realIP
+	}
+
+	// Fall back to RemoteAddr
+	return r.RemoteAddr
 }

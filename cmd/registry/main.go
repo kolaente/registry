@@ -5,12 +5,15 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/kolaente/registry/pkg/acl"
 	"github.com/kolaente/registry/pkg/auth"
 	"github.com/kolaente/registry/pkg/config"
+	"github.com/kolaente/registry/pkg/ratelimit"
 	"github.com/kolaente/registry/pkg/registry"
 	"github.com/urfave/cli/v2"
+	"golang.org/x/time/rate"
 )
 
 func main() {
@@ -87,16 +90,36 @@ func runServer(c *cli.Context) error {
 	// Create auth middleware
 	authMiddleware := auth.NewAuthMiddleware(tokenService)
 
+	// Create rate limiter if enabled
+	var rateLimitMiddleware func(http.Handler) http.Handler
+	if cfg.RateLimit.Enabled {
+		log.Printf("Rate limiting enabled: %.1f req/sec with burst of %d",
+			cfg.RateLimit.RequestsPerSec, cfg.RateLimit.Burst)
+
+		limiter := ratelimit.NewLimiter(
+			rate.Limit(cfg.RateLimit.RequestsPerSec),
+			cfg.RateLimit.Burst,
+			5*time.Minute, // Cleanup old visitors every 5 minutes
+		)
+		rateLimitMiddleware = limiter.Middleware
+	} else {
+		log.Println("Rate limiting disabled")
+		// No-op middleware
+		rateLimitMiddleware = func(next http.Handler) http.Handler {
+			return next
+		}
+	}
+
 	// Set up HTTP router
 	mux := http.NewServeMux()
 
-	// Token endpoint (no auth required)
-	mux.Handle("/v2/token", authHandler)
+	// Token endpoint (with rate limiting)
+	mux.Handle("/v2/token", rateLimitMiddleware(authHandler))
 
-	// Registry endpoints (with auth)
-	mux.Handle("/v2/", authMiddleware.Middleware(registryHandler))
+	// Registry endpoints (with auth and rate limiting)
+	mux.Handle("/v2/", rateLimitMiddleware(authMiddleware.Middleware(registryHandler)))
 
-	// Health check endpoint
+	// Health check endpoint (no rate limiting)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
