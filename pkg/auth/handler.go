@@ -187,7 +187,7 @@ func NewAuthMiddleware(tokenService *TokenService, service string) *AuthMiddlewa
 	}
 }
 
-func getAuthHeaderFromRepoContext(r *http.Request) string {
+func getAuthHeaderFromRepoContext(r *http.Request, am *AuthMiddleware) string {
 	// Construct the full token URL from the request
 	scheme := "http"
 	if r.TLS != nil {
@@ -196,7 +196,6 @@ func getAuthHeaderFromRepoContext(r *http.Request) string {
 	tokenURL := fmt.Sprintf("%s://%s/v2/token", scheme, r.Host)
 
 	// Extract repository name from path and build scope
-	var wwwAuthHeader string
 	repoName := extractRepositoryFromPath(r.URL.Path)
 	if repoName != "" {
 		// Determine actions based on HTTP method
@@ -210,7 +209,6 @@ func getAuthHeaderFromRepoContext(r *http.Request) string {
 
 	// Fallback without scope if we can't parse the repo name
 	return fmt.Sprintf(`Bearer realm="%s",service="%s"`, tokenURL, am.service)
-
 }
 
 // Middleware returns an HTTP middleware that validates tokens
@@ -225,7 +223,7 @@ func (am *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 		// Get authorization header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			wwwAuthHeader := getAuthHeaderFromRepoContext(r)
+			wwwAuthHeader := getAuthHeaderFromRepoContext(r, am)
 			w.Header().Set("WWW-Authenticate", wwwAuthHeader)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 
@@ -242,7 +240,7 @@ func (am *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 		// Validate token
 		_, err := am.tokenService.ValidateToken(parts[1])
 		if err != nil {
-			wwwAuthHeader := getAuthHeaderFromRepoContext(r)
+			wwwAuthHeader := getAuthHeaderFromRepoContext(r, am)
 			w.Header().Set("WWW-Authenticate", wwwAuthHeader)
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 
