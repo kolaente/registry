@@ -57,9 +57,9 @@ docker pull localhost:5000/myorg/alpine:latest
 ```yaml
 server:
   addr: ":5000"
-  tls:
-    enabled: false  # Use Traefik or nginx for TLS termination
 ```
+
+**Note:** This registry only supports HTTP. For production deployments with HTTPS/TLS, use a reverse proxy like Traefik, nginx, or Caddy. See the [Docker Compose with Traefik](#option-2-docker-compose-with-traefik-https) section for an example.
 
 ### Users
 
@@ -349,7 +349,7 @@ make test-coverage
   - RSA: Keep private keys secure; use file permissions 0600
   - HMAC: Use strong secrets (≥32 bytes); never commit to version control
   - Rotate secrets regularly
-- **TLS**: Use HTTPS in production (Traefik, nginx, or enable built-in TLS)
+- **TLS**: Always use a reverse proxy (Traefik, nginx, Caddy) for TLS termination in production. Built-in TLS is not supported. See `docker-compose.traefik.yml` for an example
 - **Network**: Run on internal network or behind reverse proxy
 - **Updates**: Pin distribution library version and review security updates
 

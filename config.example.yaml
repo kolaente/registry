@@ -3,13 +3,9 @@
 
 server:
   # Address to listen on
+  # NOTE: This registry only supports HTTP. For TLS/HTTPS, use a reverse proxy
+  # like Traefik, nginx, or Caddy (see docker-compose.traefik.yml for example)
   addr: ":5000"
-
-  # TLS configuration (recommended to use Traefik or nginx for TLS termination)
-  tls:
-    enabled: false
-    # cert_file: /path/to/cert.pem
-    # key_file: /path/to/key.pem
 
 # User accounts with bcrypt-hashed passwords
 # Generate with: htpasswd -nbBC 10 username password

@@ -133,11 +133,6 @@ func runServer(c *cli.Context) error {
 		Handler: mux,
 	}
 
-	if cfg.Server.TLS.Enabled {
-		log.Printf("Starting HTTPS server on %s\n", cfg.Server.Addr)
-		return server.ListenAndServeTLS(cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile)
-	}
-
 	log.Printf("Starting HTTP server on %s\n", cfg.Server.Addr)
 	return server.ListenAndServe()
 }

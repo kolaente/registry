@@ -19,15 +19,7 @@ type Config struct {
 
 // ServerConfig holds server-specific settings
 type ServerConfig struct {
-	Addr string    `yaml:"addr"`
-	TLS  TLSConfig `yaml:"tls"`
-}
-
-// TLSConfig holds TLS/SSL settings
-type TLSConfig struct {
-	Enabled  bool   `yaml:"enabled"`
-	CertFile string `yaml:"cert_file,omitempty"`
-	KeyFile  string `yaml:"key_file,omitempty"`
+	Addr string `yaml:"addr"`
 }
 
 // User represents a user account

@@ -14,8 +14,6 @@ func TestLoad(t *testing.T) {
 	configContent := `
 server:
   addr: ":5000"
-  tls:
-    enabled: false
 
 users:
   admin:
@@ -56,9 +54,6 @@ auth:
 	// Test server config
 	if cfg.Server.Addr != ":5000" {
 		t.Errorf("Server.Addr = %v, want :5000", cfg.Server.Addr)
-	}
-	if cfg.Server.TLS.Enabled {
-		t.Errorf("Server.TLS.Enabled = true, want false")
 	}
 
 	// Test users
