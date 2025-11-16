@@ -2,7 +2,6 @@ package registry
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/distribution/distribution/v3/configuration"
@@ -46,10 +45,7 @@ func NewHandler(cfg *config.Config) (*Handler, error) {
 	distConfig.Log.Formatter = "text"
 
 	// Create registry app
-	app, err := handlers.NewApp(context.Background(), distConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create registry app: %w", err)
-	}
+	app := handlers.NewApp(context.Background(), distConfig)
 
 	return &Handler{
 		app: app,

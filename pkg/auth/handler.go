@@ -41,7 +41,6 @@ type TokenResponse struct {
 // ServeHTTP handles the /v2/token endpoint
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters
-	service := r.URL.Query().Get("service")
 	scope := r.URL.Query().Get("scope")
 
 	// Get credentials from basic auth
