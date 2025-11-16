@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,12 +13,12 @@ import (
 	"github.com/kolaente/registry/pkg/config"
 	"github.com/kolaente/registry/pkg/ratelimit"
 	"github.com/kolaente/registry/pkg/registry"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 	"golang.org/x/time/rate"
 )
 
 func main() {
-	app := &cli.App{
+	cmd := &cli.Command{
 		Name:  "registry",
 		Usage: "Self-contained Docker registry with integrated authentication",
 		Flags: []cli.Flag{
@@ -26,19 +27,19 @@ func main() {
 				Aliases: []string{"c"},
 				Value:   "config.yaml",
 				Usage:   "Path to configuration file",
-				EnvVars: []string{"CONFIG_PATH"},
+				Sources: cli.EnvVars("CONFIG_PATH"),
 			},
 		},
 		Action: runServer,
 	}
 
-	if err := app.Run(os.Args); err != nil {
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func runServer(c *cli.Context) error {
-	configPath := c.String("config")
+func runServer(ctx context.Context, cmd *cli.Command) error {
+	configPath := cmd.String("config")
 
 	// Load configuration
 	cfg, err := config.Load(configPath)
