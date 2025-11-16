@@ -181,12 +181,6 @@ func (am *AuthMiddleware) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Skip auth for /v2/ ping (version check)
-		if r.URL.Path == "/v2/" {
-			next.ServeHTTP(w, r)
-			return
-		}
-
 		// Get authorization header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
