@@ -225,7 +225,7 @@ func TestRetryAfterCalculation(t *testing.T) {
 		{"0.5 req/sec", rate.Limit(0.5), 5, 2},
 	}
 
-	for _, tt := range tests {
+	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			limiter := NewLimiter(tt.rate, tt.burst, 1*time.Minute)
 
@@ -233,17 +233,20 @@ func TestRetryAfterCalculation(t *testing.T) {
 				w.WriteHeader(http.StatusOK)
 			}))
 
+			// Use unique IP for each test case to ensure isolation
+			testIP := "192.168.1." + strconv.Itoa(100+i) + ":12345"
+
 			// Exhaust the burst
-			for i := 0; i < tt.burst; i++ {
+			for j := 0; j < tt.burst; j++ {
 				req := httptest.NewRequest("GET", "/test", nil)
-				req.RemoteAddr = "192.168.1.3:12345"
+				req.RemoteAddr = testIP
 				w := httptest.NewRecorder()
 				handler.ServeHTTP(w, req)
 			}
 
 			// Get rate limited
 			req := httptest.NewRequest("GET", "/test", nil)
-			req.RemoteAddr = "192.168.1.3:12345"
+			req.RemoteAddr = testIP
 			w := httptest.NewRecorder()
 			handler.ServeHTTP(w, req)
 
@@ -268,8 +271,19 @@ func TestMiddleware_RemainingDecreases(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	previousRemaining := 5
-	for i := 0; i < 3; i++ {
+	// Make first request to get initial remaining count
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.RemoteAddr = "192.168.1.4:12345"
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	
+	previousRemaining, err := strconv.Atoi(w.Header().Get("RateLimit-Remaining"))
+	if err != nil {
+		t.Fatalf("RateLimit-Remaining is not a valid integer: %s", w.Header().Get("RateLimit-Remaining"))
+	}
+
+	// Make subsequent requests and verify decreasing pattern
+	for i := 0; i < 2; i++ {
 		req := httptest.NewRequest("GET", "/test", nil)
 		req.RemoteAddr = "192.168.1.4:12345"
 		w := httptest.NewRecorder()
@@ -283,7 +297,7 @@ func TestMiddleware_RemainingDecreases(t *testing.T) {
 
 		// Remaining should be less than or equal to previous
 		if remainingInt > previousRemaining {
-			t.Errorf("Request %d: Expected remaining <= %d, got %d", i+1, previousRemaining, remainingInt)
+			t.Errorf("Request %d: Expected remaining <= %d, got %d", i+2, previousRemaining, remainingInt)
 		}
 		previousRemaining = remainingInt
 	}
