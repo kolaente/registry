@@ -144,7 +144,7 @@ func (l *Limiter) Middleware(next http.Handler) http.Handler {
 				"message":     "Rate limit exceeded. Please try again later.",
 				"retry_after": retryAfter,
 				"limit":       l.burst,
-				"reset":       time.Now().Add(time.Duration(retryAfter) * time.Second).UTC().Format(time.RFC3339),
+				"reset":       time.Now().Add(time.Duration(resetSeconds) * time.Second).UTC().Format(time.RFC3339),
 			})
 			return
 		}
