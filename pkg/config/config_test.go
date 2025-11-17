@@ -37,8 +37,7 @@ auth:
   realm: "Registry"
   service: "Docker Registry"
   issuer: "test-issuer"
-  private_key: "/keys/private.key"
-  public_key: "/keys/public.key"
+  hmac_secret: "test-secret-key"
 `
 
 	err := os.WriteFile(configPath, []byte(configContent), 0644)
@@ -185,6 +184,9 @@ func TestValidate(t *testing.T) {
 						RootDirectory: "/data/registry",
 					},
 				},
+				Auth: AuthConfig{
+					HMACSecret: "test-secret",
+				},
 			},
 			wantErr: false,
 		},
@@ -199,6 +201,9 @@ func TestValidate(t *testing.T) {
 					Filesystem: FilesystemStorage{
 						RootDirectory: "/data/registry",
 					},
+				},
+				Auth: AuthConfig{
+					HMACSecret: "test-secret",
 				},
 			},
 			wantErr: true,
@@ -217,6 +222,29 @@ func TestValidate(t *testing.T) {
 						RootDirectory: "",
 					},
 				},
+				Auth: AuthConfig{
+					HMACSecret: "test-secret",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "no hmac_secret",
+			config: &Config{
+				Users: map[string]User{
+					"admin": {Password: "$2y$10$hash"},
+				},
+				ACL: []ACLRule{
+					{Account: "admin", Name: "*", Actions: []string{"*"}},
+				},
+				Storage: StorageConfig{
+					Filesystem: FilesystemStorage{
+						RootDirectory: "/data/registry",
+					},
+				},
+				Auth: AuthConfig{
+					HMACSecret: "",
+				},
 			},
 			wantErr: true,
 		},
@@ -233,6 +261,9 @@ func TestValidate(t *testing.T) {
 					Filesystem: FilesystemStorage{
 						RootDirectory: "/data/registry",
 					},
+				},
+				Auth: AuthConfig{
+					HMACSecret: "test-secret",
 				},
 			},
 			wantErr: true,
@@ -251,6 +282,9 @@ func TestValidate(t *testing.T) {
 						RootDirectory: "/data/registry",
 					},
 				},
+				Auth: AuthConfig{
+					HMACSecret: "test-secret",
+				},
 			},
 			wantErr: true,
 		},
@@ -267,6 +301,9 @@ func TestValidate(t *testing.T) {
 					Filesystem: FilesystemStorage{
 						RootDirectory: "/data/registry",
 					},
+				},
+				Auth: AuthConfig{
+					HMACSecret: "test-secret",
 				},
 			},
 			wantErr: true,

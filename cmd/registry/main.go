@@ -58,27 +58,13 @@ func runServer(ctx context.Context, cmd *cli.Command) error {
 	aclMatcher := acl.NewMatcher(cfg.ACL)
 
 	// Create token service
-	tokenService, err := auth.NewTokenServiceFromFiles(
+	tokenService, err := auth.NewTokenServiceFromConfig(
 		cfg.Auth.Issuer,
 		cfg.Auth.Service,
-		cfg.Auth.SigningMethod,
-		cfg.Auth.PrivateKey,
-		cfg.Auth.PublicKey,
 		cfg.Auth.HMACSecret,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create token service: %w", err)
-	}
-
-	// Save generated keys if using RSA and paths are specified and files don't exist
-	if cfg.Auth.SigningMethod == "rsa" && cfg.Auth.PrivateKey != "" && cfg.Auth.PublicKey != "" {
-		if _, err := os.Stat(cfg.Auth.PrivateKey); os.IsNotExist(err) {
-			log.Println("Generating and saving RSA key pair...")
-			if err := tokenService.SaveKeys(cfg.Auth.PrivateKey, cfg.Auth.PublicKey); err != nil {
-				return fmt.Errorf("failed to save keys: %w", err)
-			}
-			log.Printf("Keys saved to %s and %s\n", cfg.Auth.PrivateKey, cfg.Auth.PublicKey)
-		}
 	}
 
 	// Create auth handler

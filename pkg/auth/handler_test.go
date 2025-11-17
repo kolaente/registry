@@ -14,7 +14,7 @@ import (
 
 func TestHandler_ServeHTTP_Success(t *testing.T) {
 	// Setup
-	tokenService, err := NewTokenService("test-issuer", "test-service")
+	tokenService, err := NewTokenService("test-issuer", "test-service", "test-secret")
 	if err != nil {
 		t.Fatalf("NewTokenService() error = %v", err)
 	}
@@ -62,7 +62,7 @@ func TestHandler_ServeHTTP_Success(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_NoAuth(t *testing.T) {
-	tokenService, _ := NewTokenService("test-issuer", "test-service")
+	tokenService, _ := NewTokenService("test-issuer", "test-service", "test-secret")
 	aclMatcher := acl.NewMatcher([]config.ACLRule{})
 	users := map[string]config.User{}
 
@@ -84,7 +84,7 @@ func TestHandler_ServeHTTP_NoAuth(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_InvalidCredentials(t *testing.T) {
-	tokenService, _ := NewTokenService("test-issuer", "test-service")
+	tokenService, _ := NewTokenService("test-issuer", "test-service", "test-secret")
 	aclMatcher := acl.NewMatcher([]config.ACLRule{})
 
 	passwordHash, _ := bcrypt.GenerateFromPassword([]byte("correctpassword"), bcrypt.DefaultCost)
@@ -106,7 +106,7 @@ func TestHandler_ServeHTTP_InvalidCredentials(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_NonexistentUser(t *testing.T) {
-	tokenService, _ := NewTokenService("test-issuer", "test-service")
+	tokenService, _ := NewTokenService("test-issuer", "test-service", "test-secret")
 	aclMatcher := acl.NewMatcher([]config.ACLRule{})
 	users := map[string]config.User{}
 
@@ -124,7 +124,7 @@ func TestHandler_ServeHTTP_NonexistentUser(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_WithScope(t *testing.T) {
-	tokenService, _ := NewTokenService("test-issuer", "test-service")
+	tokenService, _ := NewTokenService("test-issuer", "test-service", "test-secret")
 
 	aclRules := []config.ACLRule{
 		{Account: "developer", Name: "myorg/backend-*", Actions: []string{"pull", "push"}},
@@ -167,7 +167,7 @@ func TestHandler_ServeHTTP_WithScope(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_DeniedByACL(t *testing.T) {
-	tokenService, _ := NewTokenService("test-issuer", "test-service")
+	tokenService, _ := NewTokenService("test-issuer", "test-service", "test-secret")
 
 	aclRules := []config.ACLRule{
 		{Account: "developer", Name: "myorg/backend-*", Actions: []string{"pull"}},
@@ -208,7 +208,7 @@ func TestHandler_ServeHTTP_DeniedByACL(t *testing.T) {
 }
 
 func TestHandler_ServeHTTP_NoScope(t *testing.T) {
-	tokenService, _ := NewTokenService("test-issuer", "test-service")
+	tokenService, _ := NewTokenService("test-issuer", "test-service", "test-secret")
 	aclMatcher := acl.NewMatcher([]config.ACLRule{})
 
 	passwordHash, _ := bcrypt.GenerateFromPassword([]byte("password"), bcrypt.DefaultCost)
@@ -240,7 +240,7 @@ func TestHandler_ServeHTTP_NoScope(t *testing.T) {
 }
 
 func TestAuthMiddleware_Middleware_NoAuth(t *testing.T) {
-	tokenService, _ := NewTokenService("test-issuer", "test-service")
+	tokenService, _ := NewTokenService("test-issuer", "test-service", "test-secret")
 	middleware := NewAuthMiddleware(tokenService, "test-service")
 
 	nextCalled := false
@@ -268,7 +268,7 @@ func TestAuthMiddleware_Middleware_NoAuth(t *testing.T) {
 }
 
 func TestAuthMiddleware_Middleware_ValidToken(t *testing.T) {
-	tokenService, _ := NewTokenService("test-issuer", "test-service")
+	tokenService, _ := NewTokenService("test-issuer", "test-service", "test-secret")
 	middleware := NewAuthMiddleware(tokenService, "test-service")
 
 	// Generate a valid token
@@ -296,7 +296,7 @@ func TestAuthMiddleware_Middleware_ValidToken(t *testing.T) {
 }
 
 func TestAuthMiddleware_Middleware_InvalidToken(t *testing.T) {
-	tokenService, _ := NewTokenService("test-issuer", "test-service")
+	tokenService, _ := NewTokenService("test-issuer", "test-service", "test-secret")
 	middleware := NewAuthMiddleware(tokenService, "test-service")
 
 	nextCalled := false
@@ -320,7 +320,7 @@ func TestAuthMiddleware_Middleware_InvalidToken(t *testing.T) {
 }
 
 func TestAuthMiddleware_Middleware_SkipTokenEndpoint(t *testing.T) {
-	tokenService, _ := NewTokenService("test-issuer", "test-service")
+	tokenService, _ := NewTokenService("test-issuer", "test-service", "test-secret")
 	middleware := NewAuthMiddleware(tokenService, "test-service")
 
 	nextCalled := false
@@ -340,7 +340,7 @@ func TestAuthMiddleware_Middleware_SkipTokenEndpoint(t *testing.T) {
 }
 
 func TestAuthMiddleware_Middleware_InvalidAuthHeader(t *testing.T) {
-	tokenService, _ := NewTokenService("test-issuer", "test-service")
+	tokenService, _ := NewTokenService("test-issuer", "test-service", "test-secret")
 	middleware := NewAuthMiddleware(tokenService, "test-service")
 
 	nextCalled := false
@@ -388,7 +388,7 @@ func TestAuthMiddleware_Middleware_InvalidAuthHeader(t *testing.T) {
 
 func TestHandler_ServeHTTP_ConstantTime(t *testing.T) {
 	// Setup
-	tokenService, err := NewTokenService("test-issuer", "test-service")
+	tokenService, err := NewTokenService("test-issuer", "test-service", "test-secret")
 	if err != nil {
 		t.Fatalf("NewTokenService() error = %v", err)
 	}
@@ -455,7 +455,7 @@ func TestHandler_ServeHTTP_ConstantTime(t *testing.T) {
 
 func TestHandler_ServeHTTP_ValidCredentials(t *testing.T) {
 	// Setup
-	tokenService, err := NewTokenService("test-issuer", "test-service")
+	tokenService, err := NewTokenService("test-issuer", "test-service", "test-secret")
 	if err != nil {
 		t.Fatalf("NewTokenService() error = %v", err)
 	}
@@ -498,7 +498,7 @@ func TestHandler_ServeHTTP_ValidCredentials(t *testing.T) {
 
 func TestAuthMiddleware_Middleware_ServiceNameInWWWAuthenticate(t *testing.T) {
 	t.Skip("This test is broken and needs fixing")
-	tokenService, _ := NewTokenService("test-issuer", "Custom Docker Registry Service")
+	tokenService, _ := NewTokenService("test-issuer", "Custom Docker Registry Service", "test-secret")
 	middleware := NewAuthMiddleware(tokenService, "Custom Docker Registry Service")
 
 	nextCalled := false
