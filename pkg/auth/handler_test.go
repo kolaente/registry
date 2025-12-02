@@ -616,7 +616,9 @@ func TestHandler_ServeHTTP_DeleteScope(t *testing.T) {
 			}
 
 			var response TokenResponse
-			json.NewDecoder(w.Body).Decode(&response)
+			if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+				t.Fatalf("Failed to decode response: %v", err)
+			}
 
 			claims, err := tokenService.ValidateToken(response.Token)
 			if err != nil {
