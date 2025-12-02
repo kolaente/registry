@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -523,5 +524,125 @@ func TestAuthMiddleware_Middleware_ServiceNameInWWWAuthenticate(t *testing.T) {
 	expectedWWWAuth := `Bearer realm="/v2/token",service="Custom Docker Registry Service"`
 	if wwwAuth != expectedWWWAuth {
 		t.Errorf("WWW-Authenticate = %q, want %q", wwwAuth, expectedWWWAuth)
+	}
+}
+
+func TestAuthMiddleware_Middleware_DeleteRequestRequiresDeleteAction(t *testing.T) {
+	tokenService, _ := NewTokenService("test-issuer", "test-service", "test-secret")
+	middleware := NewAuthMiddleware(tokenService, "test-service")
+
+	nextCalled := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+	})
+
+	// Make a DELETE request to a manifest endpoint
+	req := httptest.NewRequest("DELETE", "/v2/myorg/myimage/manifests/sha256:abc123", nil)
+	w := httptest.NewRecorder()
+
+	middleware.Middleware(next).ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Status = %v, want %v", w.Code, http.StatusUnauthorized)
+	}
+
+	if nextCalled {
+		t.Error("next handler should not be called without auth")
+	}
+
+	wwwAuth := w.Header().Get("WWW-Authenticate")
+	// Verify that the WWW-Authenticate header requests "delete" action, not "pull,push"
+	if !strings.Contains(wwwAuth, "scope=\"repository:myorg/myimage:delete\"") {
+		t.Errorf("WWW-Authenticate should request delete action, got: %s", wwwAuth)
+	}
+}
+
+func TestHandler_ServeHTTP_DeleteScope(t *testing.T) {
+	tokenService, _ := NewTokenService("test-issuer", "test-service", "test-secret")
+
+	aclRules := []config.ACLRule{
+		{Account: "admin", Name: "*", Actions: []string{"*"}},
+		{Account: "deleter", Name: "myorg/*", Actions: []string{"delete"}},
+		{Account: "reader", Name: "myorg/*", Actions: []string{"pull"}},
+	}
+	aclMatcher := acl.NewMatcher(aclRules)
+
+	passwordHash, _ := bcrypt.GenerateFromPassword([]byte("password"), bcrypt.DefaultCost)
+	users := map[string]config.User{
+		"admin":   {Password: string(passwordHash)},
+		"deleter": {Password: string(passwordHash)},
+		"reader":  {Password: string(passwordHash)},
+	}
+
+	handler := NewHandler(tokenService, aclMatcher, users, "Test Realm", "test-service")
+
+	tests := []struct {
+		name           string
+		username       string
+		scope          string
+		wantActions    []string
+		wantNoAccess   bool
+	}{
+		{
+			name:        "admin can delete",
+			username:    "admin",
+			scope:       "repository:myorg/app:delete",
+			wantActions: []string{"delete"},
+		},
+		{
+			name:        "deleter can delete",
+			username:    "deleter",
+			scope:       "repository:myorg/app:delete",
+			wantActions: []string{"delete"},
+		},
+		{
+			name:         "reader cannot delete",
+			username:     "reader",
+			scope:        "repository:myorg/app:delete",
+			wantNoAccess: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/v2/token?scope="+tt.scope, nil)
+			req.SetBasicAuth(tt.username, "password")
+			w := httptest.NewRecorder()
+
+			handler.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Errorf("Status = %v, want %v", w.Code, http.StatusOK)
+			}
+
+			var response TokenResponse
+			if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
+				t.Fatalf("Failed to decode response: %v", err)
+			}
+
+			claims, err := tokenService.ValidateToken(response.Token)
+			if err != nil {
+				t.Fatalf("ValidateToken() error = %v", err)
+			}
+
+			if tt.wantNoAccess {
+				if len(claims.Access) != 0 {
+					t.Errorf("Expected no access entries, got %v", claims.Access)
+				}
+			} else {
+				if len(claims.Access) != 1 {
+					t.Fatalf("Expected 1 access entry, got %v", len(claims.Access))
+				}
+				gotActions := claims.Access[0].Actions
+				if len(gotActions) != len(tt.wantActions) {
+					t.Errorf("Actions = %v, want %v", gotActions, tt.wantActions)
+				}
+				for i, action := range gotActions {
+					if action != tt.wantActions[i] {
+						t.Errorf("Actions[%d] = %v, want %v", i, action, tt.wantActions[i])
+					}
+				}
+			}
+		})
 	}
 }

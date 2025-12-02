@@ -20,8 +20,9 @@ users:
 
 # Access Control List (ACL) rules
 # Rules are evaluated in order; first match wins
+# Available actions: pull, push, delete, or * (for all actions)
 acl:
-  # Admin has full access to all repositories
+  # Admin has full access to all repositories (including delete)
   - account: "admin"
     name: "*"
     actions: ["*"]
@@ -40,6 +41,11 @@ acl:
   # - account: "readonly"
   #   name: "myorg/*"
   #   actions: ["pull"]
+
+  # Example: allow a user to delete images from a specific repository
+  # - account: "cleaner"
+  #   name: "myorg/temp-*"
+  #   actions: ["delete"]
 
 # Storage configuration
 storage:
