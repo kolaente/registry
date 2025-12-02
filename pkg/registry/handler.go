@@ -28,6 +28,9 @@ func NewHandler(cfg *config.Config) (*Handler, error) {
 			"filesystem": configuration.Parameters{
 				"rootdirectory": cfg.Storage.Filesystem.RootDirectory,
 			},
+			"delete": configuration.Parameters{
+				"enabled": true,
+			},
 		},
 		HTTP: configuration.HTTP{
 			Headers: http.Header{

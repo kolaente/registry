@@ -200,8 +200,10 @@ func getAuthHeaderFromRepoContext(r *http.Request, am *AuthMiddleware) string {
 	if repoName != "" {
 		// Determine actions based on HTTP method
 		actions := "pull"
-		if r.Method == "POST" || r.Method == "PUT" || r.Method == "PATCH" || r.Method == "DELETE" {
+		if r.Method == "POST" || r.Method == "PUT" || r.Method == "PATCH" {
 			actions = "pull,push"
+		} else if r.Method == "DELETE" {
+			actions = "delete"
 		}
 		scope := fmt.Sprintf("repository:%s:%s", repoName, actions)
 		return fmt.Sprintf(`Bearer realm="%s",service="%s",scope="%s"`, tokenURL, am.service, scope)
