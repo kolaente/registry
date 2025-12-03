@@ -117,8 +117,6 @@ func Load(path string) (*Config, error) {
 		if cfg.Storage.S3.Region == "" {
 			cfg.Storage.S3.Region = "us-east-1"
 		}
-		// Default secure to true for S3 connections
-		// Note: secure field defaults to false (Go zero value), so we can't detect if it was explicitly set
 	}
 
 	// Rate limit defaults
