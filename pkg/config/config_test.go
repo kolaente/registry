@@ -138,6 +138,118 @@ acl:
 	}
 }
 
+func TestLoad_S3Storage(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	configContent := `
+users:
+  admin:
+    password: "$2y$10$hash"
+
+acl:
+  - account: "admin"
+    name: "*"
+    actions: ["*"]
+
+storage:
+  s3:
+    accesskey: "my-access-key"
+    secretkey: "my-secret-key"
+    region: "eu-west-1"
+    regionendpoint: "http://minio:9000"
+    bucket: "my-bucket"
+    rootdirectory: "/images"
+    encrypt: true
+    secure: true
+
+auth:
+  hmac_secret: "test-secret-key"
+`
+
+	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test config file: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	// Test S3 storage config
+	if cfg.Storage.S3.AccessKey != "my-access-key" {
+		t.Errorf("Storage.S3.AccessKey = %v, want my-access-key", cfg.Storage.S3.AccessKey)
+	}
+	if cfg.Storage.S3.SecretKey != "my-secret-key" {
+		t.Errorf("Storage.S3.SecretKey = %v, want my-secret-key", cfg.Storage.S3.SecretKey)
+	}
+	if cfg.Storage.S3.Region != "eu-west-1" {
+		t.Errorf("Storage.S3.Region = %v, want eu-west-1", cfg.Storage.S3.Region)
+	}
+	if cfg.Storage.S3.RegionEndpoint != "http://minio:9000" {
+		t.Errorf("Storage.S3.RegionEndpoint = %v, want http://minio:9000", cfg.Storage.S3.RegionEndpoint)
+	}
+	if cfg.Storage.S3.Bucket != "my-bucket" {
+		t.Errorf("Storage.S3.Bucket = %v, want my-bucket", cfg.Storage.S3.Bucket)
+	}
+	if cfg.Storage.S3.RootDirectory != "/images" {
+		t.Errorf("Storage.S3.RootDirectory = %v, want /images", cfg.Storage.S3.RootDirectory)
+	}
+	if !cfg.Storage.S3.Encrypt {
+		t.Error("Storage.S3.Encrypt = false, want true")
+	}
+	if !cfg.Storage.S3.Secure {
+		t.Error("Storage.S3.Secure = false, want true")
+	}
+
+	// Filesystem should not have default value when S3 is configured
+	if cfg.Storage.Filesystem.RootDirectory != "" {
+		t.Errorf("Storage.Filesystem.RootDirectory = %v, want empty when S3 is configured", cfg.Storage.Filesystem.RootDirectory)
+	}
+}
+
+func TestLoad_S3StorageDefaults(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	// Minimal S3 config to test region default
+	configContent := `
+users:
+  admin:
+    password: "$2y$10$hash"
+
+acl:
+  - account: "admin"
+    name: "*"
+    actions: ["*"]
+
+storage:
+  s3:
+    accesskey: "my-access-key"
+    secretkey: "my-secret-key"
+    bucket: "my-bucket"
+
+auth:
+  hmac_secret: "test-secret-key"
+`
+
+	err := os.WriteFile(configPath, []byte(configContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create test config file: %v", err)
+	}
+
+	cfg, err := Load(configPath)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	// Test default region
+	if cfg.Storage.S3.Region != "us-east-1" {
+		t.Errorf("Default Storage.S3.Region = %v, want us-east-1", cfg.Storage.S3.Region)
+	}
+}
+
 func TestLoad_FileNotFound(t *testing.T) {
 	_, err := Load("/nonexistent/config.yaml")
 	if err == nil {
@@ -356,6 +468,79 @@ func TestValidate(t *testing.T) {
 					Enabled:        true,
 					Interval:       "24h",
 					RemoveUntagged: true,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid S3 storage config",
+			config: &Config{
+				Users: map[string]User{
+					"admin": {Password: "$2y$10$hash"},
+				},
+				ACL: []ACLRule{
+					{Account: "admin", Name: "*", Actions: []string{"*"}},
+				},
+				Storage: StorageConfig{
+					S3: S3Storage{
+						AccessKey: "test-access-key",
+						SecretKey: "test-secret-key",
+						Region:    "us-east-1",
+						Bucket:    "test-bucket",
+					},
+				},
+				Auth: AuthConfig{
+					HMACSecret: "test-secret",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "S3 storage without region",
+			config: &Config{
+				Users: map[string]User{
+					"admin": {Password: "$2y$10$hash"},
+				},
+				ACL: []ACLRule{
+					{Account: "admin", Name: "*", Actions: []string{"*"}},
+				},
+				Storage: StorageConfig{
+					S3: S3Storage{
+						AccessKey: "test-access-key",
+						SecretKey: "test-secret-key",
+						Region:    "",
+						Bucket:    "test-bucket",
+					},
+				},
+				Auth: AuthConfig{
+					HMACSecret: "test-secret",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid S3 storage with custom endpoint",
+			config: &Config{
+				Users: map[string]User{
+					"admin": {Password: "$2y$10$hash"},
+				},
+				ACL: []ACLRule{
+					{Account: "admin", Name: "*", Actions: []string{"*"}},
+				},
+				Storage: StorageConfig{
+					S3: S3Storage{
+						AccessKey:      "test-access-key",
+						SecretKey:      "test-secret-key",
+						Region:         "us-east-1",
+						RegionEndpoint: "http://minio:9000",
+						Bucket:         "test-bucket",
+						RootDirectory:  "/registry",
+						Encrypt:        true,
+						Secure:         true,
+					},
+				},
+				Auth: AuthConfig{
+					HMACSecret: "test-secret",
 				},
 			},
 			wantErr: false,
