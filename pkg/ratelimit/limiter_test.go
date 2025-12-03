@@ -276,7 +276,7 @@ func TestMiddleware_RemainingDecreases(t *testing.T) {
 	req.RemoteAddr = "192.168.1.4:12345"
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
-	
+
 	previousRemaining, err := strconv.Atoi(w.Header().Get("RateLimit-Remaining"))
 	if err != nil {
 		t.Fatalf("RateLimit-Remaining is not a valid integer: %s", w.Header().Get("RateLimit-Remaining"))

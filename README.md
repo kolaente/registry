@@ -20,7 +20,17 @@ A self-contained, single-binary Docker registry with built-in JWT authentication
 cp config.example.yaml config.yaml
 ```
 
-Edit `config.yaml` to customize users and permissions. Generate password hashes with:
+Edit `config.yaml` to customize users and permissions. Add users with the built-in CLI:
+
+```bash
+# Add a user with a specific password
+./registry add-user -c config.yaml myuser mypassword
+
+# Add a user with an auto-generated password (printed to stdout)
+./registry add-user -c config.yaml myuser
+```
+
+Alternatively, generate password hashes manually with:
 
 ```bash
 htpasswd -nbBC 10 username password
@@ -72,6 +82,25 @@ users:
   developer:
     password: "$2y$10$..."
 ```
+
+**Adding Users via CLI:**
+
+The `add-user` command provides a convenient way to add users to the config file:
+
+```bash
+# Add a user with a specific password
+./registry add-user --config config.yaml username password
+
+# Add a user with an auto-generated secure password
+./registry add-user --config config.yaml username
+# Output: Generated password: <random-password>
+# Output: User "username" added successfully
+```
+
+The command:
+- Hashes the password using bcrypt (cost 10)
+- Preserves existing YAML comments and formatting
+- Generates a secure 32-byte random password if none is provided
 
 ### Access Control Lists (ACL)
 

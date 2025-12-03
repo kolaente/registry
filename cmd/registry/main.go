@@ -59,6 +59,21 @@ func main() {
 				},
 				Action: runGC,
 			},
+			{
+				Name:      "add-user",
+				Usage:     "Add a user with a hashed password to the config file",
+				ArgsUsage: "<username> [password]",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "config",
+						Aliases: []string{"c"},
+						Value:   "config.yaml",
+						Usage:   "Path to configuration file",
+						Sources: cli.EnvVars("CONFIG_PATH"),
+					},
+				},
+				Action: runAddUser,
+			},
 		},
 	}
 
@@ -182,4 +197,42 @@ func runGC(ctx context.Context, cmd *cli.Command) error {
 
 	// Run garbage collection
 	return gc.RunOnce(ctx, cfg, deleteUntagged, dryRun)
+}
+
+func runAddUser(ctx context.Context, cmd *cli.Command) error {
+	configPath := cmd.String("config")
+
+	// Get username from arguments
+	args := cmd.Args()
+	if args.Len() < 1 {
+		return fmt.Errorf("username is required")
+	}
+	username := args.Get(0)
+
+	// Get or generate password
+	var password string
+	var err error
+	if args.Len() >= 2 {
+		password = args.Get(1)
+	} else {
+		password, err = config.GeneratePassword()
+		if err != nil {
+			return fmt.Errorf("failed to generate password: %w", err)
+		}
+		fmt.Printf("Generated password: %s\n", password)
+	}
+
+	// Hash the password
+	hashedPassword, err := config.HashPassword(password)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Add user to config file
+	if err := config.AddUser(configPath, username, hashedPassword); err != nil {
+		return fmt.Errorf("failed to add user: %w", err)
+	}
+
+	fmt.Printf("User %q added successfully\n", username)
+	return nil
 }
