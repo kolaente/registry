@@ -26,7 +26,7 @@ func getStorage(cfg *config.Config) configuration.Storage {
 				"rootdirectory": cfg.Storage.Filesystem.RootDirectory,
 			},
 			"delete": configuration.Parameters{
-				"enabled": true,
+				"enabled": cfg.Storage.Delete.Enabled,
 			},
 		}
 	}
@@ -56,7 +56,7 @@ func getStorage(cfg *config.Config) configuration.Storage {
 	return configuration.Storage{
 		"s3": s3Params,
 		"delete": configuration.Parameters{
-			"enabled": true,
+			"enabled": cfg.Storage.Delete.Enabled,
 		},
 	}
 }
