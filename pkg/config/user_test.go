@@ -201,4 +201,76 @@ storage:
 			t.Errorf("newuser.Password = %v, want %v", user.Password, hashedPassword)
 		}
 	})
+
+	t.Run("preserves YAML comments when adding user", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "config.yaml")
+
+		// Config with various types of comments
+		configContent := `# Top-level config comment
+server:
+  addr: ":5000"
+
+# Users section comment
+users:
+  # Admin user comment
+  admin:
+    password: "$2y$10$hash" # inline password comment
+
+storage:
+  filesystem:
+    rootdirectory: "/data/registry"
+`
+		err := os.WriteFile(configPath, []byte(configContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test config file: %v", err)
+		}
+
+		hashedPassword := "$2a$10$testhashedpassword"
+		err = AddUser(configPath, "newuser", hashedPassword)
+		if err != nil {
+			t.Fatalf("AddUser() error = %v", err)
+		}
+
+		// Read the file content and check that comments are preserved
+		content, err := os.ReadFile(configPath)
+		if err != nil {
+			t.Fatalf("Failed to read config file: %v", err)
+		}
+
+		contentStr := string(content)
+
+		// Check that comments are preserved
+		if !strings.Contains(contentStr, "# Top-level config comment") {
+			t.Error("Top-level comment was not preserved")
+		}
+		if !strings.Contains(contentStr, "# Users section comment") {
+			t.Error("Users section comment was not preserved")
+		}
+		if !strings.Contains(contentStr, "# Admin user comment") {
+			t.Error("Admin user comment was not preserved")
+		}
+		if !strings.Contains(contentStr, "# inline password comment") {
+			t.Error("Inline password comment was not preserved")
+		}
+
+		// Also verify the new user was added correctly
+		cfg, err := Load(configPath)
+		if err != nil {
+			t.Fatalf("Load() error after AddUser() = %v", err)
+		}
+
+		if len(cfg.Users) != 2 {
+			t.Errorf("len(Users) = %v, want 2", len(cfg.Users))
+		}
+
+		user, ok := cfg.Users["newuser"]
+		if !ok {
+			t.Error("newuser not found in config after AddUser()")
+		}
+
+		if user.Password != hashedPassword {
+			t.Errorf("newuser.Password = %v, want %v", user.Password, hashedPassword)
+		}
+	})
 }
