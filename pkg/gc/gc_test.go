@@ -108,18 +108,19 @@ func TestGarbageCollector_StartStop(t *testing.T) {
 	}
 }
 
-func TestRunOnce(t *testing.T) {
+// setupTestRegistry creates the directory structure required by the distribution library
+func setupTestRegistry(t *testing.T) (string, *config.Config) {
+	t.Helper()
 	tmpDir := t.TempDir()
 
 	// Create the docker registry directory structure that the distribution expects
 	repositoriesDir := filepath.Join(tmpDir, "docker", "registry", "v2", "repositories")
 	blobsDir := filepath.Join(tmpDir, "docker", "registry", "v2", "blobs")
-	err := os.MkdirAll(repositoriesDir, 0755)
-	if err != nil {
+
+	if err := os.MkdirAll(repositoriesDir, 0755); err != nil {
 		t.Fatalf("Failed to create repositories directory: %v", err)
 	}
-	err = os.MkdirAll(blobsDir, 0755)
-	if err != nil {
+	if err := os.MkdirAll(blobsDir, 0755); err != nil {
 		t.Fatalf("Failed to create blobs directory: %v", err)
 	}
 
@@ -131,43 +132,47 @@ func TestRunOnce(t *testing.T) {
 		},
 	}
 
+	return tmpDir, cfg
+}
+
+func TestRunOnce(t *testing.T) {
+	_, cfg := setupTestRegistry(t)
 	ctx := context.Background()
 
+	removeUntagged := true
+	dryRun := true
+
 	// Run garbage collection - should complete without error on empty registry
-	err = RunOnce(ctx, cfg, true, true)
+	err := RunOnce(ctx, cfg, removeUntagged, dryRun)
 	if err != nil {
 		t.Errorf("RunOnce() error = %v", err)
 	}
 }
 
 func TestRunOnce_DryRun(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Create the docker registry directory structure that the distribution expects
-	repositoriesDir := filepath.Join(tmpDir, "docker", "registry", "v2", "repositories")
-	blobsDir := filepath.Join(tmpDir, "docker", "registry", "v2", "blobs")
-	err := os.MkdirAll(repositoriesDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create repositories directory: %v", err)
-	}
-	err = os.MkdirAll(blobsDir, 0755)
-	if err != nil {
-		t.Fatalf("Failed to create blobs directory: %v", err)
-	}
-
-	cfg := &config.Config{
-		Storage: config.StorageConfig{
-			Filesystem: config.FilesystemStorage{
-				RootDirectory: tmpDir,
-			},
-		},
-	}
-
+	_, cfg := setupTestRegistry(t)
 	ctx := context.Background()
 
+	removeUntagged := true
+	dryRun := true
+
 	// Run garbage collection in dry-run mode
-	err = RunOnce(ctx, cfg, true, true)
+	err := RunOnce(ctx, cfg, removeUntagged, dryRun)
 	if err != nil {
 		t.Errorf("RunOnce() with dry-run error = %v", err)
+	}
+}
+
+func TestRunOnce_NoUntaggedRemoval(t *testing.T) {
+	_, cfg := setupTestRegistry(t)
+	ctx := context.Background()
+
+	removeUntagged := false
+	dryRun := true
+
+	// Run garbage collection without removing untagged manifests
+	err := RunOnce(ctx, cfg, removeUntagged, dryRun)
+	if err != nil {
+		t.Errorf("RunOnce() without untagged removal error = %v", err)
 	}
 }
