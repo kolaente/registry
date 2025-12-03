@@ -39,11 +39,24 @@ type ACLRule struct {
 // StorageConfig defines where to store registry data
 type StorageConfig struct {
 	Filesystem FilesystemStorage `yaml:"filesystem"`
+	S3         S3Storage         `yaml:"s3"`
 }
 
 // FilesystemStorage configures filesystem storage
 type FilesystemStorage struct {
 	RootDirectory string `yaml:"rootdirectory"`
+}
+
+// S3Storage configures S3 storage
+type S3Storage struct {
+	AccessKey      string `yaml:"accesskey"`
+	SecretKey      string `yaml:"secretkey"`
+	Region         string `yaml:"region"`
+	RegionEndpoint string `yaml:"regionendpoint"`
+	Bucket         string `yaml:"bucket"`
+	RootDirectory  string `yaml:"rootdirectory"`
+	Encrypt        bool   `yaml:"encrypt"`
+	Secure         bool   `yaml:"secure"`
 }
 
 // AuthConfig holds authentication settings
@@ -94,8 +107,16 @@ func Load(path string) (*Config, error) {
 		cfg.Auth.Issuer = "registry-auth-server"
 	}
 
-	if cfg.Storage.Filesystem.RootDirectory == "" {
+	// Only set filesystem root directory default if S3 is not configured
+	if cfg.Storage.S3.Bucket == "" && cfg.Storage.Filesystem.RootDirectory == "" {
 		cfg.Storage.Filesystem.RootDirectory = "/data/registry"
+	}
+
+	// S3 defaults
+	if cfg.Storage.S3.Bucket != "" {
+		if cfg.Storage.S3.Region == "" {
+			cfg.Storage.S3.Region = "us-east-1"
+		}
 	}
 
 	// Rate limit defaults
@@ -120,8 +141,19 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("at least one user must be defined")
 	}
 
-	if c.Storage.Filesystem.RootDirectory == "" {
-		return fmt.Errorf("storage root directory must be set")
+	// Validate storage configuration: either filesystem or S3 must be configured
+	hasFilesystem := c.Storage.Filesystem.RootDirectory != ""
+	hasS3 := c.Storage.S3.Bucket != ""
+
+	if !hasFilesystem && !hasS3 {
+		return fmt.Errorf("storage configuration required: either filesystem.rootdirectory or s3.bucket must be set")
+	}
+
+	// Validate S3 configuration if S3 is being used
+	if hasS3 {
+		if c.Storage.S3.Region == "" {
+			return fmt.Errorf("storage.s3.region must be set when using S3 storage")
+		}
 	}
 
 	// Validate authentication configuration

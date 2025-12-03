@@ -138,11 +138,51 @@ acl:
 
 ### Storage
 
+The registry supports two storage backends: **filesystem** (default) and **S3-compatible storage**.
+
+#### Filesystem Storage (Default)
+
 ```yaml
 storage:
   filesystem:
     rootdirectory: "/data/registry"
 ```
+
+#### S3 Storage
+
+For scalable, distributed deployments, you can use Amazon S3 or any S3-compatible storage service (like MinIO, DigitalOcean Spaces, etc.):
+
+```yaml
+storage:
+  s3:
+    accesskey: "your-access-key"      # AWS access key (optional if using IAM roles)
+    secretkey: "your-secret-key"      # AWS secret key (optional if using IAM roles)
+    region: "us-east-1"               # AWS region
+    bucket: "your-bucket-name"        # S3 bucket name (required)
+    regionendpoint: ""                # Custom endpoint for S3-compatible services
+    rootdirectory: ""                 # Optional prefix for all objects
+    encrypt: false                    # Enable server-side encryption
+    secure: true                      # Use HTTPS for S3 connections (default: true)
+```
+
+**S3-Compatible Services (MinIO example):**
+
+```yaml
+storage:
+  s3:
+    accesskey: "minio-access-key"
+    secretkey: "minio-secret-key"
+    region: "us-east-1"
+    regionendpoint: "http://minio:9000"
+    bucket: "registry"
+    secure: false
+```
+
+**Notes:**
+- When using S3, do not configure `filesystem` storage
+- For AWS EC2 instances with IAM roles, you can omit `accesskey` and `secretkey`
+- The `regionendpoint` is required for S3-compatible services like MinIO
+- Set `secure: false` when connecting to non-HTTPS endpoints
 
 ### Garbage Collection
 

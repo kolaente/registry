@@ -48,10 +48,22 @@ acl:
   #   actions: ["delete"]
 
 # Storage configuration
+# Choose either filesystem or s3 storage (not both)
 storage:
   filesystem:
     # Directory where images will be stored
     rootdirectory: "/data/registry"
+
+  # S3-compatible storage (uncomment to use instead of filesystem)
+  # s3:
+  #   accesskey: "your-access-key"
+  #   secretkey: "your-secret-key"
+  #   region: "us-east-1"
+  #   regionendpoint: ""          # Custom endpoint for S3-compatible services (e.g., MinIO)
+  #   bucket: "your-bucket-name"
+  #   rootdirectory: ""           # Optional prefix for all objects
+  #   encrypt: false              # Enable server-side encryption
+  #   secure: true                # Use HTTPS for S3 connections
 
 # Authentication settings
 auth:
