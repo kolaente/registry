@@ -37,6 +37,13 @@ func HashPassword(password string) (string, error) {
 
 // AddUser adds a user with the given username and hashed password to the config file.
 func AddUser(configPath, username, hashedPassword string) error {
+	// Get original file permissions
+	fileInfo, err := os.Stat(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to stat config file: %w", err)
+	}
+	originalMode := fileInfo.Mode()
+
 	// Read the existing config file
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -102,7 +109,7 @@ func AddUser(configPath, username, hashedPassword string) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(configPath, output, 0644); err != nil {
+	if err := os.WriteFile(configPath, output, originalMode.Perm()); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
