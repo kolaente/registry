@@ -133,6 +133,9 @@ acl:
 	if cfg.Storage.Filesystem.RootDirectory != "/data/registry" {
 		t.Errorf("Default Storage.Filesystem.RootDirectory = %v, want /data/registry", cfg.Storage.Filesystem.RootDirectory)
 	}
+	if cfg.GarbageCollector.Interval != "24h" {
+		t.Errorf("Default GarbageCollector.Interval = %v, want 24h", cfg.GarbageCollector.Interval)
+	}
 }
 
 func TestLoad_FileNotFound(t *testing.T) {
@@ -307,6 +310,55 @@ func TestValidate(t *testing.T) {
 				},
 			},
 			wantErr: true,
+		},
+		{
+			name: "invalid garbage collector interval",
+			config: &Config{
+				Users: map[string]User{
+					"admin": {Password: "$2y$10$hash"},
+				},
+				ACL: []ACLRule{
+					{Account: "admin", Name: "*", Actions: []string{"*"}},
+				},
+				Storage: StorageConfig{
+					Filesystem: FilesystemStorage{
+						RootDirectory: "/data/registry",
+					},
+				},
+				Auth: AuthConfig{
+					HMACSecret: "test-secret",
+				},
+				GarbageCollector: GarbageCollectorConfig{
+					Enabled:  true,
+					Interval: "invalid",
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid garbage collector config",
+			config: &Config{
+				Users: map[string]User{
+					"admin": {Password: "$2y$10$hash"},
+				},
+				ACL: []ACLRule{
+					{Account: "admin", Name: "*", Actions: []string{"*"}},
+				},
+				Storage: StorageConfig{
+					Filesystem: FilesystemStorage{
+						RootDirectory: "/data/registry",
+					},
+				},
+				Auth: AuthConfig{
+					HMACSecret: "test-secret",
+				},
+				GarbageCollector: GarbageCollectorConfig{
+					Enabled:        true,
+					Interval:       "24h",
+					RemoveUntagged: true,
+				},
+			},
+			wantErr: false,
 		},
 	}
 

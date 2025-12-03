@@ -115,6 +115,34 @@ storage:
     rootdirectory: "/data/registry"
 ```
 
+### Garbage Collection
+
+The registry includes automatic garbage collection to clean up unreferenced blobs and optionally remove untagged manifests.
+
+```yaml
+garbage_collector:
+  enabled: true          # Enable automatic garbage collection
+  interval: "24h"        # How often to run GC (e.g., "24h", "1h30m")
+  remove_untagged: true  # Remove manifests not referenced by any tag
+```
+
+**How it works:**
+- When `remove_untagged: true`, manifests that aren't referenced by any tag are deleted
+- All blob layers that are no longer referenced by any manifest are cleaned up
+- GC runs automatically at the configured interval when `enabled: true`
+
+**Manual Garbage Collection:**
+
+You can also run garbage collection manually via the CLI:
+
+```bash
+# Run garbage collection
+./registry gc --config config.yaml --delete-untagged
+
+# Dry run (show what would be deleted without deleting)
+./registry gc --config config.yaml --delete-untagged --dry-run
+```
+
 ### Authentication
 
 The registry supports two JWT signing methods: **RSA** (asymmetric) and **HMAC** (symmetric).
@@ -334,6 +362,8 @@ make test-coverage
 │   │   └── token.go      # JWT service
 │   ├── config/           # Configuration
 │   │   └── config.go
+│   ├── gc/               # Garbage collection
+│   │   └── gc.go         # GC service and CLI
 │   └── registry/         # Registry handler
 │       └── handler.go
 ├── config.example.yaml   # Example configuration
