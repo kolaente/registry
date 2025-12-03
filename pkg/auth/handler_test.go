@@ -577,11 +577,11 @@ func TestHandler_ServeHTTP_DeleteScope(t *testing.T) {
 	handler := NewHandler(tokenService, aclMatcher, users, "Test Realm", "test-service")
 
 	tests := []struct {
-		name           string
-		username       string
-		scope          string
-		wantActions    []string
-		wantNoAccess   bool
+		name         string
+		username     string
+		scope        string
+		wantActions  []string
+		wantNoAccess bool
 	}{
 		{
 			name:        "admin can delete",
