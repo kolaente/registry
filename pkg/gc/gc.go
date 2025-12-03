@@ -23,6 +23,37 @@ type GarbageCollector struct {
 	doneCh         chan struct{}
 }
 
+// createDriverAndRegistry creates a storage driver and registry for garbage collection
+func createDriverAndRegistry(ctx context.Context, rootDirectory string) (storagedriver.StorageDriver, distribution.Namespace, error) {
+	driver, err := factory.Create(ctx, "filesystem", map[string]interface{}{
+		"rootdirectory": rootDirectory,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	registry, err := storage.NewRegistry(ctx, driver, storage.EnableDelete)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return driver, registry, nil
+}
+
+// runGCWithOptions performs garbage collection with the given options
+func runGCWithOptions(ctx context.Context, driver storagedriver.StorageDriver, registry distribution.Namespace, opts storage.GCOpts) error {
+	log.Println("Starting garbage collection...")
+	start := time.Now()
+
+	err := storage.MarkAndSweep(ctx, driver, registry, opts)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("Garbage collection completed in %v", time.Since(start))
+	return nil
+}
+
 // NewGarbageCollector creates a new garbage collector
 func NewGarbageCollector(cfg *config.Config) (*GarbageCollector, error) {
 	interval, err := time.ParseDuration(cfg.GarbageCollector.Interval)
@@ -31,17 +62,7 @@ func NewGarbageCollector(cfg *config.Config) (*GarbageCollector, error) {
 	}
 
 	ctx := context.Background()
-
-	// Create storage driver
-	driver, err := factory.Create(ctx, "filesystem", map[string]interface{}{
-		"rootdirectory": cfg.Storage.Filesystem.RootDirectory,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// Create registry
-	registry, err := storage.NewRegistry(ctx, driver, storage.EnableDelete)
+	driver, registry, err := createDriverAndRegistry(ctx, cfg.Storage.Filesystem.RootDirectory)
 	if err != nil {
 		return nil, err
 	}
@@ -88,11 +109,8 @@ func (gc *GarbageCollector) run() {
 
 // runGC performs a single garbage collection run
 func (gc *GarbageCollector) runGC() {
-	log.Println("Starting garbage collection...")
-	start := time.Now()
-
 	ctx := context.Background()
-	err := storage.MarkAndSweep(ctx, gc.driver, gc.registry, storage.GCOpts{
+	err := runGCWithOptions(ctx, gc.driver, gc.registry, storage.GCOpts{
 		DryRun:         false,
 		RemoveUntagged: gc.removeUntagged,
 		Quiet:          true,
@@ -100,41 +118,19 @@ func (gc *GarbageCollector) runGC() {
 
 	if err != nil {
 		log.Printf("Garbage collection failed: %v", err)
-		return
 	}
-
-	log.Printf("Garbage collection completed in %v", time.Since(start))
 }
 
 // RunOnce performs a single garbage collection run (for CLI usage)
 func RunOnce(ctx context.Context, cfg *config.Config, removeUntagged, dryRun bool) error {
-	log.Println("Starting garbage collection...")
-	start := time.Now()
-
-	// Create storage driver
-	driver, err := factory.Create(ctx, "filesystem", map[string]interface{}{
-		"rootdirectory": cfg.Storage.Filesystem.RootDirectory,
-	})
+	driver, registry, err := createDriverAndRegistry(ctx, cfg.Storage.Filesystem.RootDirectory)
 	if err != nil {
 		return err
 	}
 
-	// Create registry
-	registry, err := storage.NewRegistry(ctx, driver, storage.EnableDelete)
-	if err != nil {
-		return err
-	}
-
-	err = storage.MarkAndSweep(ctx, driver, registry, storage.GCOpts{
+	return runGCWithOptions(ctx, driver, registry, storage.GCOpts{
 		DryRun:         dryRun,
 		RemoveUntagged: removeUntagged,
 		Quiet:          false,
 	})
-
-	if err != nil {
-		return err
-	}
-
-	log.Printf("Garbage collection completed in %v", time.Since(start))
-	return nil
 }
