@@ -14,7 +14,7 @@ const (
 	// BcryptCost is the cost parameter used for bcrypt password hashing.
 	BcryptCost = 10
 	// DefaultPasswordLength is the length of generated random passwords in bytes.
-	DefaultPasswordLength = 16
+	DefaultPasswordLength = 32
 )
 
 // GeneratePassword generates a random password string.
