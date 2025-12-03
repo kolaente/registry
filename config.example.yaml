@@ -68,3 +68,10 @@ rate_limit:
   enabled: true
   requests_per_sec: 10  # Requests per second per IP address
   burst: 20             # Maximum burst size (allows temporary spikes)
+
+# Garbage collection configuration
+# Automatically cleans up unreferenced layers and optionally untagged manifests
+garbage_collector:
+  enabled: false        # Enable automatic garbage collection
+  interval: "24h"       # How often to run garbage collection (e.g., "24h", "1h30m")
+  remove_untagged: true # Remove manifests that are not referenced by any tag

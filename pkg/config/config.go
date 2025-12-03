@@ -3,18 +3,20 @@ package config
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
 // Config represents the main configuration structure
 type Config struct {
-	Server    ServerConfig    `yaml:"server"`
-	Users     map[string]User `yaml:"users"`
-	ACL       []ACLRule       `yaml:"acl"`
-	Storage   StorageConfig   `yaml:"storage"`
-	Auth      AuthConfig      `yaml:"auth"`
-	RateLimit RateLimitConfig `yaml:"rate_limit"`
+	Server           ServerConfig           `yaml:"server"`
+	Users            map[string]User        `yaml:"users"`
+	ACL              []ACLRule              `yaml:"acl"`
+	Storage          StorageConfig          `yaml:"storage"`
+	Auth             AuthConfig             `yaml:"auth"`
+	RateLimit        RateLimitConfig        `yaml:"rate_limit"`
+	GarbageCollector GarbageCollectorConfig `yaml:"garbage_collector"`
 }
 
 // ServerConfig holds server-specific settings
@@ -59,6 +61,13 @@ type RateLimitConfig struct {
 	Burst          int     `yaml:"burst"`            // Burst size
 }
 
+// GarbageCollectorConfig holds garbage collection settings
+type GarbageCollectorConfig struct {
+	Enabled        bool   `yaml:"enabled"`         // Enable/disable automatic garbage collection
+	Interval       string `yaml:"interval"`        // Interval between garbage collection runs (e.g., "24h", "1h30m")
+	RemoveUntagged bool   `yaml:"remove_untagged"` // Remove untagged manifests during garbage collection
+}
+
 // Load reads and parses the configuration file
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
@@ -97,6 +106,11 @@ func Load(path string) (*Config, error) {
 		cfg.RateLimit.Burst = 20 // Burst of 20 requests
 	}
 
+	// Garbage collector defaults
+	if cfg.GarbageCollector.Interval == "" {
+		cfg.GarbageCollector.Interval = "24h" // Default to daily
+	}
+
 	return &cfg, nil
 }
 
@@ -125,6 +139,13 @@ func (c *Config) Validate() error {
 		}
 		if len(rule.Actions) == 0 {
 			return fmt.Errorf("ACL rule %d: at least one action must be specified", i)
+		}
+	}
+
+	// Validate garbage collector configuration
+	if c.GarbageCollector.Enabled {
+		if _, err := time.ParseDuration(c.GarbageCollector.Interval); err != nil {
+			return fmt.Errorf("garbage_collector.interval is invalid: %w", err)
 		}
 	}
 

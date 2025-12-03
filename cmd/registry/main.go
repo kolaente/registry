@@ -11,6 +11,7 @@ import (
 	"github.com/kolaente/registry/pkg/acl"
 	"github.com/kolaente/registry/pkg/auth"
 	"github.com/kolaente/registry/pkg/config"
+	"github.com/kolaente/registry/pkg/gc"
 	"github.com/kolaente/registry/pkg/ratelimit"
 	"github.com/kolaente/registry/pkg/registry"
 	"github.com/urfave/cli/v3"
@@ -31,6 +32,34 @@ func main() {
 			},
 		},
 		Action: runServer,
+		Commands: []*cli.Command{
+			{
+				Name:  "gc",
+				Usage: "Run garbage collection on the registry storage",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "config",
+						Aliases: []string{"c"},
+						Value:   "config.yaml",
+						Usage:   "Path to configuration file",
+						Sources: cli.EnvVars("CONFIG_PATH"),
+					},
+					&cli.BoolFlag{
+						Name:    "dry-run",
+						Aliases: []string{"d"},
+						Value:   false,
+						Usage:   "Do everything except remove the blobs",
+					},
+					&cli.BoolFlag{
+						Name:    "delete-untagged",
+						Aliases: []string{"m"},
+						Value:   false,
+						Usage:   "Delete manifests that are not currently referenced via tag",
+					},
+				},
+				Action: runGC,
+			},
+		},
 	}
 
 	if err := cmd.Run(context.Background(), os.Args); err != nil {
@@ -99,6 +128,22 @@ func runServer(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
+	// Start garbage collector if enabled
+	var garbageCollector *gc.GarbageCollector
+	if cfg.GarbageCollector.Enabled {
+		log.Printf("Garbage collection enabled: interval=%s, remove_untagged=%v",
+			cfg.GarbageCollector.Interval, cfg.GarbageCollector.RemoveUntagged)
+
+		garbageCollector, err = gc.NewGarbageCollector(cfg)
+		if err != nil {
+			return fmt.Errorf("failed to create garbage collector: %w", err)
+		}
+		garbageCollector.Start()
+		defer garbageCollector.Stop()
+	} else {
+		log.Println("Garbage collection disabled")
+	}
+
 	// Set up HTTP router
 	mux := http.NewServeMux()
 
@@ -122,4 +167,19 @@ func runServer(ctx context.Context, cmd *cli.Command) error {
 
 	log.Printf("Starting HTTP server on %s\n", cfg.Server.Addr)
 	return server.ListenAndServe()
+}
+
+func runGC(ctx context.Context, cmd *cli.Command) error {
+	configPath := cmd.String("config")
+	dryRun := cmd.Bool("dry-run")
+	deleteUntagged := cmd.Bool("delete-untagged")
+
+	// Load configuration
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Run garbage collection
+	return gc.RunOnce(ctx, cfg, deleteUntagged, dryRun)
 }
