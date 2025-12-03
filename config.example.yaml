@@ -50,10 +50,6 @@ acl:
 # Storage configuration
 # Choose either filesystem or s3 storage (not both)
 storage:
-  # Enable or disable blob deletion via the API
-  delete:
-    enabled: true
-
   filesystem:
     # Directory where images will be stored
     rootdirectory: "/data/registry"

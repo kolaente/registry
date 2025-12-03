@@ -40,12 +40,6 @@ type ACLRule struct {
 type StorageConfig struct {
 	Filesystem FilesystemStorage `yaml:"filesystem"`
 	S3         S3Storage         `yaml:"s3"`
-	Delete     DeleteConfig      `yaml:"delete"`
-}
-
-// DeleteConfig configures whether blob deletion is enabled
-type DeleteConfig struct {
-	Enabled bool `yaml:"enabled"`
 }
 
 // FilesystemStorage configures filesystem storage
