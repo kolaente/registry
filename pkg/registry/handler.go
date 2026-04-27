@@ -72,6 +72,7 @@ func NewHandler(cfg *config.Config) (*Handler, error) {
 	distConfig := &configuration.Configuration{
 		Version: "0.1",
 		Storage: getStorage(cfg),
+		Catalog: configuration.Catalog{MaxEntries: 1000},
 		HTTP: configuration.HTTP{
 			Headers: http.Header{
 				"X-Content-Type-Options": []string{"nosniff"},
