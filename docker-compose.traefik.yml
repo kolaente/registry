@@ -8,7 +8,11 @@ version: '3.8'
 
 services:
   registry:
-    build: .
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-unknown}
     container_name: docker-registry
     restart: unless-stopped
     volumes:

@@ -39,3 +39,12 @@ func TestWriteUsageTableKeepsSizeColumnsReadableWithManyTags(t *testing.T) {
 		t.Fatalf("row does not summarize tags after size columns:\n%s", rendered)
 	}
 }
+
+func TestBuildInfoStringIncludesCommit(t *testing.T) {
+	got := buildInfoString("dev", "abc1234")
+	want := "version=dev commit=abc1234"
+
+	if got != want {
+		t.Fatalf("buildInfoString() = %q, want %q", got, want)
+	}
+}

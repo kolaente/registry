@@ -7,8 +7,7 @@ CMD_DIR=./cmd/registry
 # Build variables
 VERSION?=dev
 COMMIT?=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-BUILD_TIME?=$(shell date -u '+%Y-%m-%d_%H:%M:%S')
-LDFLAGS=-ldflags "-w -s -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildTime=$(BUILD_TIME)"
+LDFLAGS=-ldflags "-w -s -X main.Version=$(VERSION) -X main.Commit=$(COMMIT)"
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -56,7 +55,7 @@ clean: ## Clean build artifacts
 	@echo "Clean complete"
 
 docker-build: ## Build Docker image
-	docker build -t registry:$(VERSION) .
+	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) -t registry:$(VERSION) .
 
 docker-run: ## Run Docker container
 	@if [ ! -f config.yaml ]; then \

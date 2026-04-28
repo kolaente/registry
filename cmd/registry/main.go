@@ -25,6 +25,11 @@ import (
 
 const defaultUsageTableTagLimit = 6
 
+var (
+	Version = "dev"
+	Commit  = "unknown"
+)
+
 func main() {
 	cmd := &cli.Command{
 		Name:  "registry",
@@ -110,6 +115,8 @@ func main() {
 
 func runServer(ctx context.Context, cmd *cli.Command) error {
 	configPath := cmd.String("config")
+
+	log.Printf("Starting registry build: %s", buildInfoString(Version, Commit))
 
 	// Load configuration
 	cfg, err := config.Load(configPath)
@@ -208,6 +215,10 @@ func runServer(ctx context.Context, cmd *cli.Command) error {
 
 	log.Printf("Starting HTTP server on %s\n", cfg.Server.Addr)
 	return server.ListenAndServe()
+}
+
+func buildInfoString(version, commit string) string {
+	return fmt.Sprintf("version=%s commit=%s", version, commit)
 }
 
 func runGC(ctx context.Context, cmd *cli.Command) error {

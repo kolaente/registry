@@ -6,6 +6,9 @@ RUN apk add --no-cache git ca-certificates tzdata
 
 WORKDIR /build
 
+ARG VERSION=dev
+ARG COMMIT=unknown
+
 # Copy go mod files
 COPY go.mod go.sum ./
 RUN go mod download
@@ -15,7 +18,7 @@ COPY . .
 
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-    -ldflags='-w -s -extldflags "-static"' \
+    -ldflags="-w -s -extldflags=-static -X main.Version=${VERSION} -X main.Commit=${COMMIT}" \
     -a \
     -o registry \
     ./cmd/registry
