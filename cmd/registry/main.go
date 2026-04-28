@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -21,6 +22,8 @@ import (
 	"github.com/urfave/cli/v3"
 	"golang.org/x/time/rate"
 )
+
+const defaultUsageTableTagLimit = 6
 
 func main() {
 	cmd := &cli.Command{
@@ -257,26 +260,41 @@ func runUsage(ctx context.Context, cmd *cli.Command) error {
 }
 
 func printUsageTable(report *usagepkg.Report) {
-	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(writer, "REPOSITORY\tTAGS\tATTRIBUTED\tREFERENCED\tEXCLUSIVE\tSHARED\tBLOBS")
+	writeUsageTable(os.Stdout, report, defaultUsageTableTagLimit)
+}
+
+func writeUsageTable(output io.Writer, report *usagepkg.Report, tagLimit int) {
+	writer := tabwriter.NewWriter(output, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(writer, "REPOSITORY\tATTRIBUTED\tREFERENCED\tEXCLUSIVE\tSHARED\tBLOBS\tTAGS")
 	for _, repository := range report.Repositories {
 		fmt.Fprintf(
 			writer,
-			"%s\t%s\t%s\t%s\t%s\t%s\t%d\n",
+			"%s\t%s\t%s\t%s\t%s\t%d\t%s\n",
 			repository.Repository,
-			strings.Join(repository.Tags, ","),
 			repository.AttributedSize,
 			repository.ReferencedSize,
 			repository.ExclusiveSize,
 			repository.SharedSize,
 			repository.BlobCount,
+			summarizeTags(repository.Tags, tagLimit),
 		)
 	}
 	writer.Flush()
 
-	fmt.Fprintf(os.Stdout, "\nTotal blob storage: %s\n", report.TotalBlobSize)
-	fmt.Fprintf(os.Stdout, "Referenced by current tags: %s\n", report.TotalReferencedSize)
-	fmt.Fprintf(os.Stdout, "Unreferenced: %s\n", report.UnreferencedSize)
+	fmt.Fprintf(output, "\nTotal blob storage: %s\n", report.TotalBlobSize)
+	fmt.Fprintf(output, "Referenced by current tags: %s\n", report.TotalReferencedSize)
+	fmt.Fprintf(output, "Unreferenced: %s\n", report.UnreferencedSize)
+}
+
+func summarizeTags(tags []string, limit int) string {
+	if len(tags) == 0 {
+		return "-"
+	}
+	if limit <= 0 || len(tags) <= limit {
+		return strings.Join(tags, ",")
+	}
+
+	return fmt.Sprintf("%s,+%d more", strings.Join(tags[:limit], ","), len(tags)-limit)
 }
 
 func runAddUser(ctx context.Context, cmd *cli.Command) error {

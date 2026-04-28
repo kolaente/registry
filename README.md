@@ -223,8 +223,8 @@ To see how much registry storage each image accounts for, run:
 The report attributes shared blobs evenly across repositories, so shared base layers are not fully counted against every image. It also shows the fully referenced size, exclusive size, shared size, and unreferenced bytes:
 
 ```text
-REPOSITORY  TAGS    ATTRIBUTED  REFERENCED  EXCLUSIVE  SHARED  BLOBS
-test/image  latest  8.01 MiB    8.01 MiB    8.01 MiB   0 B     5
+REPOSITORY  ATTRIBUTED  REFERENCED  EXCLUSIVE  SHARED  BLOBS  TAGS
+test/image  8.01 MiB    8.01 MiB    8.01 MiB   0 B     5      latest
 
 Total blob storage: 8.01 MiB
 Referenced by current tags: 8.01 MiB
