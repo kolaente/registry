@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/kolaente/registry/pkg/acl"
@@ -14,6 +17,7 @@ import (
 	"github.com/kolaente/registry/pkg/gc"
 	"github.com/kolaente/registry/pkg/ratelimit"
 	"github.com/kolaente/registry/pkg/registry"
+	usagepkg "github.com/kolaente/registry/pkg/usage"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/time/rate"
 )
@@ -58,6 +62,25 @@ func main() {
 					},
 				},
 				Action: runGC,
+			},
+			{
+				Name:  "usage",
+				Usage: "Report attributed image storage usage",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "config",
+						Aliases: []string{"c"},
+						Value:   "config.yaml",
+						Usage:   "Path to configuration file",
+						Sources: cli.EnvVars("CONFIG_PATH"),
+					},
+					&cli.StringFlag{
+						Name:  "format",
+						Value: "table",
+						Usage: "Output format: table or json",
+					},
+				},
+				Action: runUsage,
 			},
 			{
 				Name:      "add-user",
@@ -197,6 +220,63 @@ func runGC(ctx context.Context, cmd *cli.Command) error {
 
 	// Run garbage collection
 	return gc.RunOnce(ctx, cfg, deleteUntagged, dryRun)
+}
+
+func runUsage(ctx context.Context, cmd *cli.Command) error {
+	configPath := cmd.String("config")
+	outputFormat := cmd.String("format")
+
+	cfg, err := config.Load(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	if cfg.Storage.S3.Bucket != "" {
+		return fmt.Errorf("usage report currently supports filesystem storage only")
+	}
+
+	report, err := usagepkg.AnalyzeFilesystem(cfg.Storage.Filesystem.RootDirectory)
+	if err != nil {
+		return err
+	}
+
+	switch outputFormat {
+	case "table":
+		printUsageTable(report)
+	case "json":
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(report); err != nil {
+			return fmt.Errorf("failed to encode usage report: %w", err)
+		}
+	default:
+		return fmt.Errorf("unsupported format %q: use table or json", outputFormat)
+	}
+
+	return nil
+}
+
+func printUsageTable(report *usagepkg.Report) {
+	writer := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(writer, "REPOSITORY\tTAGS\tATTRIBUTED\tREFERENCED\tEXCLUSIVE\tSHARED\tBLOBS")
+	for _, repository := range report.Repositories {
+		fmt.Fprintf(
+			writer,
+			"%s\t%s\t%s\t%s\t%s\t%s\t%d\n",
+			repository.Repository,
+			strings.Join(repository.Tags, ","),
+			repository.AttributedSize,
+			repository.ReferencedSize,
+			repository.ExclusiveSize,
+			repository.SharedSize,
+			repository.BlobCount,
+		)
+	}
+	writer.Flush()
+
+	fmt.Fprintf(os.Stdout, "\nTotal blob storage: %s\n", report.TotalBlobSize)
+	fmt.Fprintf(os.Stdout, "Referenced by current tags: %s\n", report.TotalReferencedSize)
+	fmt.Fprintf(os.Stdout, "Unreferenced: %s\n", report.UnreferencedSize)
 }
 
 func runAddUser(ctx context.Context, cmd *cli.Command) error {
