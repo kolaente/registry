@@ -212,6 +212,31 @@ You can also run garbage collection manually via the CLI:
 ./registry gc --config config.yaml --delete-untagged --dry-run
 ```
 
+### Storage Usage Report
+
+To see how much registry storage each image accounts for, run:
+
+```bash
+./registry usage --config config.yaml
+```
+
+The report attributes shared blobs evenly across repositories, so shared base layers are not fully counted against every image. It also shows the fully referenced size, exclusive size, shared size, and unreferenced bytes:
+
+```text
+REPOSITORY  TAGS    ATTRIBUTED  REFERENCED  EXCLUSIVE  SHARED  BLOBS
+test/image  latest  8.01 MiB    8.01 MiB    8.01 MiB   0 B     5
+
+Total blob storage: 8.01 MiB
+Referenced by current tags: 8.01 MiB
+Unreferenced: 0 B
+```
+
+For automation, use JSON output:
+
+```bash
+./registry usage --config config.yaml --format json
+```
+
 ### Authentication
 
 The registry supports two JWT signing methods: **RSA** (asymmetric) and **HMAC** (symmetric).
