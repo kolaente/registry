@@ -188,9 +188,14 @@ func NewAuthMiddleware(tokenService *TokenService, service string) *AuthMiddlewa
 }
 
 func getAuthHeaderFromRepoContext(r *http.Request, am *AuthMiddleware) string {
-	// Construct the full token URL from the request
+	// Construct the full token URL from the request. Honor X-Forwarded-Proto so
+	// that registries fronted by a TLS-terminating reverse proxy advertise an
+	// https:// realm — clients like regctl refuse to send credentials from an
+	// https registry to an http token server.
 	scheme := "http"
-	if r.TLS != nil {
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+		scheme = strings.ToLower(strings.TrimSpace(strings.Split(proto, ",")[0]))
+	} else if r.TLS != nil {
 		scheme = "https"
 	}
 	tokenURL := fmt.Sprintf("%s://%s/v2/token", scheme, r.Host)
